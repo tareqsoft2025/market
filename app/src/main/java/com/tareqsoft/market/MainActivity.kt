@@ -2,6 +2,8 @@ package com.tareqsoft.market
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavType
@@ -46,6 +48,9 @@ object Routes {
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Draw behind the system bars on every Android version (Android 15 forces it anyway)
+        // and let each screen pad itself, so no button ends up under the navigation bar.
+        enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
         val container = (application as MarketApp).container
         setContent {

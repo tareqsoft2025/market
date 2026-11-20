@@ -10,6 +10,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import com.tareqsoft.market.ui.PrimaryActionButton
+import com.tareqsoft.market.ui.ReceiptInk
+import com.tareqsoft.market.ui.ReceiptPanel
+import com.tareqsoft.market.ui.ReceiptRule
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -133,13 +138,17 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
     fun onEnter() {
         val q = vm.query.trim()
         if (q.isEmpty()) return
+        val matches = results
+        // Clear the field right away: barcode scanners can send the next code
+        // before the database lookup finishes, and the codes must not merge.
+        vm.query = ""
         scope.launch {
-            if (vm.addByBarcode(q)) {
-                vm.query = ""
-            } else if (results.size == 1) {
-                vm.add(results.first()); vm.query = ""
-            } else if (results.isEmpty()) {
-                snackbar.showSnackbar("لا يوجد صنف بهذا الباركود: $q")
+            if (vm.addByBarcode(q)) return@launch
+            val byName = matches.filter { it.name.contains(q) || it.barcode == q }
+            when {
+                byName.size == 1 -> vm.add(byName.first())
+                byName.isEmpty() -> snackbar.showSnackbar("لا يوجد صنف بهذا الباركود: $q")
+                else -> vm.query = q // several matches: keep the text so the user can pick
             }
         }
     }
@@ -160,21 +169,32 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
             }
         },
         bottomBar = {
-            Surface(shadowElevation = 8.dp, color = MaterialTheme.colorScheme.surface) {
-                Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("الإجمالي: ${money(vm.subtotal)}", color = Color.Gray)
-                            Text(money(vm.total), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            ReceiptPanel {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("المجموع  ${money(vm.subtotal)}", color = ReceiptInk.copy(alpha = 0.6f), style = MaterialTheme.typography.bodyMedium)
+                        if (vm.discount > 0) {
+                            Text("الخصم  ${money(vm.discount)}", color = Danger, style = MaterialTheme.typography.bodyMedium)
                         }
-                        NumberField(vm.discountText, { vm.discountText = it }, "خصم", Modifier.width(110.dp))
                     }
-                    Button(
-                        onClick = { checkout = true },
-                        enabled = vm.cart.isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(52.dp),
-                    ) { Text("إتمام البيع (${vm.cart.size} صنف)") }
+                    NumberField(vm.discountText, { vm.discountText = it }, "خصم", Modifier.width(112.dp))
                 }
+                ReceiptRule(Modifier.padding(vertical = 10.dp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("الإجمالي", color = ReceiptInk, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    Text(
+                        money(vm.total),
+                        style = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum"),
+                        fontWeight = FontWeight.Bold,
+                        color = ReceiptInk,
+                    )
+                }
+                PrimaryActionButton(
+                    text = if (vm.cart.isEmpty()) "إتمام البيع" else "إتمام البيع (${vm.cart.size} صنف)",
+                    onClick = { checkout = true },
+                    enabled = vm.cart.isNotEmpty(),
+                    modifier = Modifier.padding(top = 12.dp),
+                )
             }
         },
     ) { padding ->
@@ -302,9 +322,9 @@ private fun CartRow(line: CartLine, onMinus: () -> Unit, onPlus: () -> Unit, onE
                 Text("${money(line.unitPrice)} × ${Qty.format(line.quantity)}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 if (short) Text("تنبيه: الكمية في المخزن ${Qty.format(line.product.quantity)} فقط", style = MaterialTheme.typography.bodySmall, color = Warning)
             }
-            OutlinedButton(onClick = onMinus, contentPadding = PaddingValues(0.dp), modifier = Modifier.width(40.dp)) { Text("−") }
+            OutlinedButton(onClick = onMinus, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(48.dp)) { Text("−", style = MaterialTheme.typography.titleLarge) }
             Text(Qty.format(line.quantity), Modifier.padding(horizontal = 8.dp), fontWeight = FontWeight.Bold)
-            OutlinedButton(onClick = onPlus, contentPadding = PaddingValues(0.dp), modifier = Modifier.width(40.dp)) { Text("+") }
+            OutlinedButton(onClick = onPlus, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(48.dp)) { Text("+", style = MaterialTheme.typography.titleLarge) }
             Text(money(line.total), Modifier.width(90.dp).padding(start = 8.dp), fontWeight = FontWeight.Bold)
         }
     }

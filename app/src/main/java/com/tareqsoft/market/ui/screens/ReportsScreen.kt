@@ -28,6 +28,7 @@ import com.tareqsoft.market.ui.Danger
 import com.tareqsoft.market.ui.DayNavigator
 import com.tareqsoft.market.ui.LabelValue
 import com.tareqsoft.market.ui.LocalContainer
+import com.tareqsoft.market.ui.BottomSpacer
 import com.tareqsoft.market.ui.ScreenScaffold
 import com.tareqsoft.market.ui.StatCard
 import com.tareqsoft.market.ui.money
@@ -113,6 +114,7 @@ fun ReportsScreen(onBack: () -> Unit) {
                 "ملاحظة: الربح محسوب على تكلفة الصنف وقت البيع.",
                 style = MaterialTheme.typography.bodySmall, color = Color.Gray,
             )
+            BottomSpacer()
         }
     }
 }

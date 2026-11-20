@@ -47,6 +47,11 @@ class Updater(private val context: Context) {
 
     suspend fun check(silent: Boolean = false) {
         if (_state.value is UpdateState.Downloading) return
+        if (BuildConfig.DEBUG) {
+            // The test build is a separate app; it must not install the real release.
+            _state.value = if (silent) UpdateState.Idle else UpdateState.Failed("التحديثات معطلة في نسخة الاختبار")
+            return
+        }
         _state.value = UpdateState.Checking
         // Two update channels; the newest version found wins:
         //  1. dist/update.json on the main branch (works without GitHub Actions)

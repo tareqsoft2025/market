@@ -52,6 +52,8 @@ import com.tareqsoft.market.ui.DayNavigator
 import com.tareqsoft.market.ui.EmptyState
 import com.tareqsoft.market.ui.LabelValue
 import com.tareqsoft.market.ui.LocalContainer
+import com.tareqsoft.market.ui.BottomSpacer
+import com.tareqsoft.market.ui.PrimaryActionButton
 import com.tareqsoft.market.ui.NumberField
 import com.tareqsoft.market.ui.ScreenScaffold
 import com.tareqsoft.market.ui.Warning
@@ -197,12 +199,13 @@ fun SaleDetailScreen(saleId: String, onBack: () -> Unit, onReturn: (String) -> U
             }
 
             Spacer(Modifier.height(8.dp))
-            Button(
+            PrimaryActionButton(
+                text = if (canReturn) "مردود مبيعات" else "تم إرجاع كل الأصناف",
                 onClick = { onReturn(s.id) },
                 enabled = canReturn,
                 colors = ButtonDefaults.buttonColors(containerColor = Danger),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) { Text(if (canReturn) "مردود مبيعات" else "تم إرجاع كل الأصناف") }
+            )
+            BottomSpacer()
         }
     }
 }
@@ -289,7 +292,8 @@ fun ReturnScreen(saleId: String, onBack: () -> Unit) {
             ChipSelector(methods, method, { refundLabel(it) }, { refundMethod = it })
             OutlinedTextField(note, { note = it }, label = { Text("سبب المردود") }, modifier = Modifier.fillMaxWidth())
             LabelValue("قيمة المردود", money(refund), Danger, true)
-            Button(
+            PrimaryActionButton(
+                text = "تأكيد المردود",
                 onClick = {
                     saving = true
                     scope.launch {
@@ -305,8 +309,8 @@ fun ReturnScreen(saleId: String, onBack: () -> Unit) {
                 },
                 enabled = lines.isNotEmpty() && !saving,
                 colors = ButtonDefaults.buttonColors(containerColor = Danger),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) { Text("تأكيد المردود") }
+            )
+            BottomSpacer()
         }
     }
 }

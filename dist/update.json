@@ -1,7 +1,7 @@
 {
-  "version": "1.0.1",
-  "versionCode": 10001,
+  "version": "1.0.2",
+  "versionCode": 10002,
   "apkUrl": "https://raw.githubusercontent.com/tareqsoft2025/market/main/dist/market.apk",
-  "size": 7353537,
-  "notes": "تحديث تلقائي من GitHub مباشرة: يتم تنزيل التحديث في الخلفية عند فتح التطبيق"
+  "size": 7791337,
+  "notes": "رفع الأزرار فوق أزرار التحكم في الهاتف، أزرار أكبر وخط عربي أوضح، وإصلاح ضياع الأصناف عند المسح السريع بالباركود"
 }
