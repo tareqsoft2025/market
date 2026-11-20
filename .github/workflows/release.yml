@@ -1,0 +1,66 @@
+name: Release
+
+# Publishing a new version:
+#   git tag v1.2.0 && git push origin v1.2.0
+# This builds a signed APK and attaches it to a GitHub Release. Installed apps
+# find it from Settings / home screen and update in place, keeping their data.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Compute version from tag
+        id: ver
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          IFS='.' read -r MAJ MIN PAT <<< "$TAG"
+          CODE=$(( MAJ * 10000 + MIN * 100 + PAT ))
+          echo "name=$TAG" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "Version $TAG (code $CODE)"
+
+      - name: Decode signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MARKET_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Secret MARKET_KEYSTORE_BASE64 is missing. See README (Signing key)."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/market.jks"
+          echo "MARKET_KEYSTORE_FILE=$RUNNER_TEMP/market.jks" >> "$GITHUB_ENV"
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon testReleaseUnitTest
+
+      - name: Build signed release APK
+        env:
+          MARKET_KEYSTORE_PASSWORD: ${{ secrets.MARKET_KEYSTORE_PASSWORD }}
+          MARKET_KEY_ALIAS: ${{ secrets.MARKET_KEY_ALIAS }}
+          MARKET_KEY_PASSWORD: ${{ secrets.MARKET_KEY_PASSWORD }}
+        run: |
+          ./gradlew --no-daemon assembleRelease \
+            -PversionName=${{ steps.ver.outputs.name }} \
+            -PversionCode=${{ steps.ver.outputs.code }}
+          cp app/build/outputs/apk/release/app-release.apk "market-v${{ steps.ver.outputs.name }}.apk"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: market-v${{ steps.ver.outputs.name }}.apk
+          generate_release_notes: true

@@ -1,0 +1,15 @@
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+build/
+/captures
+.externalNativeBuild/
+.cxx/
+.kotlin/
+
+# Signing keys must NEVER be committed
+*.jks
+*.keystore
+keystore.properties
