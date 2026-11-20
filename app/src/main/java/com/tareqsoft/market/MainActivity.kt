@@ -53,8 +53,9 @@ class MainActivity : ComponentActivity() {
                 val nav = rememberNavController()
                 val back: () -> Unit = { nav.popBackStack() }
 
-                // Look for a new version once each time the app opens.
-                LaunchedEffect(Unit) { container.updater.check(silent = true) }
+                // Each time the app opens: look for a new version and download it
+                // in the background, so the user only has to tap "Install".
+                LaunchedEffect(Unit) { container.updater.checkAndDownload() }
 
                 NavHost(navController = nav, startDestination = Routes.HOME) {
                     composable(Routes.HOME) { HomeScreen(navigate = { nav.navigate(it) }) }

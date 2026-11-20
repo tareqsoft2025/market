@@ -29,6 +29,10 @@ android {
 
         // Used by the in-app updater to look for new releases.
         buildConfigField("String", "UPDATE_REPO", "\"tareqsoft2025/market\"")
+        buildConfigField(
+            "String", "UPDATE_MANIFEST_URL",
+            "\"https://raw.githubusercontent.com/tareqsoft2025/market/main/dist/update.json\"",
+        )
     }
 
     signingConfigs {

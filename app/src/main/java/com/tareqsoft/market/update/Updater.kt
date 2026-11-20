@@ -48,19 +48,65 @@ class Updater(private val context: Context) {
     suspend fun check(silent: Boolean = false) {
         if (_state.value is UpdateState.Downloading) return
         _state.value = UpdateState.Checking
-        _state.value = try {
-            val release = fetchLatest()
-            if (release != null && isNewer(release.version, currentVersion)) {
-                UpdateState.Available(release)
-            } else {
-                UpdateState.UpToDate
+        // Two update channels; the newest version found wins:
+        //  1. dist/update.json on the main branch (works without GitHub Actions)
+        //  2. the latest GitHub Release (published by the release workflow)
+        var error: Exception? = null
+        val candidates = listOf(::fetchManifest, ::fetchLatestRelease).mapNotNull { source ->
+            try {
+                source()
+            } catch (e: Exception) {
+                error = e
+                null
             }
-        } catch (e: Exception) {
-            if (silent) UpdateState.Idle else UpdateState.Failed("تعذر التحقق من التحديثات: ${e.message ?: "خطأ في الاتصال"}")
+        }
+        val best = candidates.maxWithOrNull { a, b ->
+            when {
+                isNewer(a.version, b.version) -> 1
+                isNewer(b.version, a.version) -> -1
+                else -> 0
+            }
+        }
+        _state.value = when {
+            best != null && isNewer(best.version, currentVersion) -> UpdateState.Available(best)
+            candidates.isEmpty() && error != null ->
+                if (silent) UpdateState.Idle
+                else UpdateState.Failed("تعذر التحقق من التحديثات: ${error?.message ?: "خطأ في الاتصال"}")
+            else -> UpdateState.UpToDate
         }
     }
 
-    private suspend fun fetchLatest(): ReleaseInfo? = withContext(Dispatchers.IO) {
+    /** Checks for an update and, if one exists, downloads it straight away. */
+    suspend fun checkAndDownload() {
+        check(silent = true)
+        val s = _state.value
+        if (s is UpdateState.Available) download(s.release)
+    }
+
+    private suspend fun fetchManifest(): ReleaseInfo? = withContext(Dispatchers.IO) {
+        val url = URL("${BuildConfig.UPDATE_MANIFEST_URL}?t=${System.currentTimeMillis() / 60_000}")
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 15_000
+            useCaches = false
+            setRequestProperty("User-Agent", "market-app")
+        }
+        try {
+            if (conn.responseCode == 404) return@withContext null
+            if (conn.responseCode != 200) throw IllegalStateException("HTTP ${conn.responseCode}")
+            val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            ReleaseInfo(
+                version = json.getString("version").removePrefix("v"),
+                notes = json.optString("notes", ""),
+                apkUrl = json.getString("apkUrl"),
+                apkSize = json.optLong("size"),
+            )
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private suspend fun fetchLatestRelease(): ReleaseInfo? = withContext(Dispatchers.IO) {
         val url = URL("https://api.github.com/repos/${BuildConfig.UPDATE_REPO}/releases/latest")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
