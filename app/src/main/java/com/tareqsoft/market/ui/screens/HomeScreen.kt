@@ -42,6 +42,7 @@ import com.tareqsoft.market.Routes
 import com.tareqsoft.market.ui.Danger
 import com.tareqsoft.market.ui.Info
 import com.tareqsoft.market.ui.LocalContainer
+import com.tareqsoft.market.ui.BottomSpacer
 import com.tareqsoft.market.ui.ScreenScaffold
 import com.tareqsoft.market.ui.StatCard
 import com.tareqsoft.market.ui.Warning
@@ -109,6 +110,7 @@ fun HomeScreen(navigate: (String) -> Unit) {
                     if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
+            BottomSpacer()
         }
     }
 }

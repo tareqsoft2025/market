@@ -51,6 +51,7 @@ import com.tareqsoft.market.ui.ChipSelector
 import com.tareqsoft.market.ui.Danger
 import com.tareqsoft.market.ui.EmptyState
 import com.tareqsoft.market.ui.LocalContainer
+import com.tareqsoft.market.ui.PrimaryActionButton
 import com.tareqsoft.market.ui.NumberField
 import com.tareqsoft.market.ui.ScreenScaffold
 import com.tareqsoft.market.ui.StatCard
@@ -210,7 +211,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit, onOpenSale: (St
         if (c == null) return@ScreenScaffold
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(12.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
@@ -221,7 +222,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit, onOpenSale: (St
                 )
             }
             item {
-                Button(onClick = { collecting = true }, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("تحصيل دفعة من العميل") }
+                PrimaryActionButton("تحصيل دفعة من العميل", onClick = { collecting = true })
             }
             if (payments.isNotEmpty()) {
                 item { Text("الدفعات", style = MaterialTheme.typography.titleMedium) }

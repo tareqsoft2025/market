@@ -1,7 +1,24 @@
 package com.tareqsoft.market.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -79,8 +96,11 @@ fun ScreenScaffold(
             )
         },
         snackbarHost = { if (snackbar != null) SnackbarHost(snackbar) },
-        floatingActionButton = floatingActionButton,
+        // Lift floating buttons clear of the phone's own navigation buttons / gesture bar.
+        floatingActionButton = { Box(Modifier.padding(bottom = 12.dp)) { floatingActionButton() } },
         bottomBar = bottomBar,
+        // Keep content out from under the status bar, navigation bar and keyboard.
+        contentWindowInsets = WindowInsets.safeDrawing,
         content = content,
     )
 }
@@ -233,6 +253,82 @@ fun rememberBarcodeScanner(onResult: (String) -> Unit): () -> Unit {
                 .setPrompt("وجّه الكاميرا نحو الباركود")
                 .setBeepEnabled(true)
                 .setOrientationLocked(false)
+        )
+    }
+}
+
+/** Extra room at the end of a scrolling screen so the last button is never at the screen edge. */
+@Composable
+fun BottomSpacer() = Spacer(Modifier.height(32.dp))
+
+/** The main action of a screen: tall, full width, easy to hit with a thumb. */
+@Composable
+fun PrimaryActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    colors: ButtonColors = ButtonDefaults.buttonColors(),
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        colors = colors,
+        shape = MaterialTheme.shapes.medium,
+        modifier = modifier.fillMaxWidth().heightIn(min = 58.dp),
+    ) { Text(text, style = MaterialTheme.typography.titleMedium) }
+}
+
+/**
+ * Bottom panel styled as the torn edge of a printed receipt. It sits above the
+ * phone's navigation buttons (and above the keyboard when it is open) with
+ * extra space so the buttons inside are comfortable to press.
+ */
+@Composable
+fun ReceiptPanel(content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        ReceiptEdge()
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(ReceiptPaper)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
+                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun ReceiptEdge() {
+    Canvas(Modifier.fillMaxWidth().height(10.dp)) {
+        val tooth = 14.dp.toPx()
+        val path = Path().apply {
+            moveTo(0f, size.height)
+            var x = 0f
+            while (x < size.width) {
+                lineTo(x + tooth / 2, 0f)
+                lineTo(x + tooth, size.height)
+                x += tooth
+            }
+            lineTo(size.width, size.height)
+            close()
+        }
+        drawPath(path, ReceiptPaper)
+        drawPath(path, Color(0x22000000), style = Stroke(width = 1.dp.toPx()))
+    }
+}
+
+/** Dashed rule, like the separators printed on a receipt. */
+@Composable
+fun ReceiptRule(modifier: Modifier = Modifier) {
+    Canvas(modifier.fillMaxWidth().height(1.dp)) {
+        drawLine(
+            color = ReceiptInk.copy(alpha = 0.35f),
+            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+            end = androidx.compose.ui.geometry.Offset(size.width, 0f),
+            strokeWidth = 1.dp.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
         )
     }
 }

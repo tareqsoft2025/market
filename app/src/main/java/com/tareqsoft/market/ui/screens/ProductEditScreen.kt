@@ -46,6 +46,8 @@ import com.tareqsoft.market.ui.ConfirmDialog
 import com.tareqsoft.market.ui.Danger
 import com.tareqsoft.market.ui.LabelValue
 import com.tareqsoft.market.ui.LocalContainer
+import com.tareqsoft.market.ui.BottomSpacer
+import com.tareqsoft.market.ui.PrimaryActionButton
 import com.tareqsoft.market.ui.NumberField
 import com.tareqsoft.market.ui.ScreenScaffold
 import com.tareqsoft.market.ui.money
@@ -200,13 +202,14 @@ fun ProductEditScreen(productId: String, onBack: () -> Unit) {
                 if (isNew) NumberField(openingQty, { openingQty = it }, "الكمية الافتتاحية", Modifier.weight(1f))
                 NumberField(minQty, { minQty = it }, "حد إعادة الطلب", Modifier.weight(1f))
             }
-            Button(onClick = { save() }, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("حفظ") }
+            PrimaryActionButton("حفظ", onClick = { save() })
 
             if (movements.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Text("حركة الصنف (كرت الصنف)", style = MaterialTheme.typography.titleMedium)
                 movements.take(100).forEach { MovementRow(it) }
             }
+            BottomSpacer()
         }
     }
 

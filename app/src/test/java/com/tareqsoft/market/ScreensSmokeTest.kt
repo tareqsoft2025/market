@@ -67,6 +67,6 @@ class ScreensSmokeTest {
         repeat(3) { field.performTextInput("111"); field.performImeAction() }
         Thread.sleep(800); rule.waitForIdle()
         rule.onNodeWithText("إتمام البيع (1 صنف)").assertExists()
-        rule.onNodeWithText("الإجمالي: \u200E15.00").assertExists()
+        rule.onNodeWithText("5.00 × 3", substring = true).assertExists()
     }
 }

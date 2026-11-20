@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import com.tareqsoft.market.ui.ConfirmDialog
 import com.tareqsoft.market.ui.LabelValue
 import com.tareqsoft.market.ui.LocalContainer
+import com.tareqsoft.market.ui.BottomSpacer
+import com.tareqsoft.market.ui.PrimaryActionButton
 import com.tareqsoft.market.ui.ScreenScaffold
 import com.tareqsoft.market.util.Dates
 import android.net.Uri
@@ -95,15 +98,16 @@ fun SettingsScreen(onBack: () -> Unit) {
                     "حذف التطبيق أو مسح بياناته يحذف كل شيء، والنسخة الاحتياطية هي الحماية الوحيدة حتى تفعيل الرفع للإنترنت.",
                 style = MaterialTheme.typography.bodySmall, color = Color.Gray,
             )
-            Button(
+            PrimaryActionButton(
+                "حفظ نسخة احتياطية",
                 onClick = { exportLauncher.launch("market-backup-${Dates.date(System.currentTimeMillis()).replace('/', '-')}.db") },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("حفظ نسخة احتياطية") }
-            OutlinedButton(onClick = { importLauncher.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
+            )
+            OutlinedButton(onClick = { importLauncher.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                 Text("استرجاع من نسخة احتياطية")
             }
 
             Text("معرّف الجهاز (للمزامنة مستقبلاً): ${current.deviceId.take(8)}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            BottomSpacer()
         }
     }
 
