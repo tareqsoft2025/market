@@ -260,9 +260,8 @@ private fun MovementRow(m: StockMovement) {
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(MovementType.label(m.type), fontWeight = FontWeight.Bold)
-            val sign = if (m.quantityChange > 0) "+" else ""
             Text(
-                "$sign${Qty.format(m.quantityChange)}  ←  ${Qty.format(m.quantityAfter)}",
+                (if (m.quantityChange < 0) "صادر " else "وارد ") + Qty.format(kotlin.math.abs(m.quantityChange)) + "   • الرصيد ${Qty.format(m.quantityAfter)}",
                 color = if (m.quantityChange < 0) Danger else MaterialTheme.colorScheme.primary,
             )
         }

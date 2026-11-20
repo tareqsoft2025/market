@@ -89,7 +89,7 @@ fun ScreenScaffold(
 @Composable
 fun money(minor: Long): String {
     val currency = LocalContainer.current.settings.state.collectAsState().value.currency
-    val s = Money.format(minor)
+    val s = "\u200E" + Money.format(minor)
     return if (currency.isBlank()) s else "$s $currency"
 }
 
@@ -135,8 +135,8 @@ fun LabelValue(label: String, value: String, valueColor: Color = Color.Unspecifi
         Modifier.fillMaxWidth().padding(vertical = 3.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, color = Color.DarkGray)
-        Text(value, color = valueColor, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
+        Text(label, color = Color.DarkGray, modifier = Modifier.weight(1f).padding(end = 8.dp))
+        Text(value, color = valueColor, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, softWrap = false)
     }
 }
 

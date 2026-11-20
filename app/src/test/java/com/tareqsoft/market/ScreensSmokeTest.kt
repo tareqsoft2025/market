@@ -4,6 +4,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import org.junit.Rule
@@ -52,5 +53,20 @@ class ScreensSmokeTest {
         rule.onNodeWithText("حفظ").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("ماء").assertExists()
+    }
+
+    /** A barcode scanner can send codes faster than the database lookup; none may be lost. */
+    @Test
+    fun rapidBarcodeScansAreAllCounted() {
+        val repo = (rule.activity.application as MarketApp).container.repo
+        kotlinx.coroutines.runBlocking {
+            repo.addProduct(com.tareqsoft.market.data.Product(name = "حليب", barcode = "111", salePrice = 500, quantity = 9.0))
+        }
+        rule.onNodeWithText("نقطة البيع").performScrollTo().performClick()
+        val field = rule.onNodeWithText("امسح الباركود أو اكتب اسم الصنف")
+        repeat(3) { field.performTextInput("111"); field.performImeAction() }
+        Thread.sleep(800); rule.waitForIdle()
+        rule.onNodeWithText("إتمام البيع (1 صنف)").assertExists()
+        rule.onNodeWithText("الإجمالي: \u200E15.00").assertExists()
     }
 }

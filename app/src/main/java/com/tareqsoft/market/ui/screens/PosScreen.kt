@@ -133,13 +133,17 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
     fun onEnter() {
         val q = vm.query.trim()
         if (q.isEmpty()) return
+        val matches = results
+        // Clear the field right away: barcode scanners can send the next code
+        // before the database lookup finishes, and the codes must not merge.
+        vm.query = ""
         scope.launch {
-            if (vm.addByBarcode(q)) {
-                vm.query = ""
-            } else if (results.size == 1) {
-                vm.add(results.first()); vm.query = ""
-            } else if (results.isEmpty()) {
-                snackbar.showSnackbar("لا يوجد صنف بهذا الباركود: $q")
+            if (vm.addByBarcode(q)) return@launch
+            val byName = matches.filter { it.name.contains(q) || it.barcode == q }
+            when {
+                byName.size == 1 -> vm.add(byName.first())
+                byName.isEmpty() -> snackbar.showSnackbar("لا يوجد صنف بهذا الباركود: $q")
+                else -> vm.query = q // several matches: keep the text so the user can pick
             }
         }
     }
