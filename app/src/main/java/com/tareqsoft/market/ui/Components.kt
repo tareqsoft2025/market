@@ -2,6 +2,8 @@ package com.tareqsoft.market.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ColumnScope
@@ -51,6 +53,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -192,7 +195,7 @@ fun <T> ChipSelector(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { opt ->
             FilterChip(
                 selected = opt == selected,
@@ -331,4 +334,90 @@ fun ReceiptRule(modifier: Modifier = Modifier) {
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
         )
     }
+}
+
+/**
+ * Text field with a drop-down list. With [editable] = false the user can only
+ * pick from the list; otherwise the list offers suggestions and free text is allowed.
+ * [footer] is an extra last entry, e.g. "add a new department".
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DropdownField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    options: List<String>,
+    label: String,
+    modifier: Modifier = Modifier,
+    editable: Boolean = false,
+    placeholder: String = "",
+    footer: Pair<String, () -> Unit>? = null,
+) {
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.material3.ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier,
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = { if (editable) onValueChange(it) },
+            readOnly = !editable,
+            singleLine = true,
+            label = { Text(label) },
+            placeholder = if (placeholder.isNotEmpty()) ({ Text(placeholder) }) else null,
+            trailingIcon = { androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier
+                .menuAnchor(
+                    if (editable) androidx.compose.material3.MenuAnchorType.PrimaryEditable
+                    else androidx.compose.material3.MenuAnchorType.PrimaryNotEditable
+                )
+                .fillMaxWidth(),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { opt ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(opt) },
+                    onClick = { onValueChange(opt); expanded = false },
+                    contentPadding = androidx.compose.material3.ExposedDropdownMenuDefaults.ItemContentPadding,
+                )
+            }
+            if (footer != null) {
+                androidx.compose.material3.HorizontalDivider()
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(footer.first, color = MaterialTheme.colorScheme.primary) },
+                    onClick = { expanded = false; footer.second() },
+                )
+            }
+        }
+    }
+}
+
+/** Common selling units; the user can still type any other unit. */
+val UNIT_SUGGESTIONS = listOf("حبة", "كرتون", "علبة", "كيس", "كجم", "جرام", "أوقية", "رطل", "لتر")
+
+/** Simple one-field dialog (add / rename). */
+@Composable
+fun TextInputDialog(
+    title: String,
+    label: String,
+    initial: String = "",
+    confirmText: String = "حفظ",
+    error: String? = null,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                OutlinedTextField(text, { text = it }, label = { Text(label) }, singleLine = true, isError = error != null)
+                if (error != null) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = { Button(onClick = { onConfirm(text) }) { Text(confirmText) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } },
+    )
 }

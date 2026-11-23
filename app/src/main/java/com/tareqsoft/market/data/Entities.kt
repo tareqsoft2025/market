@@ -1,5 +1,6 @@
 package com.tareqsoft.market.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -36,6 +37,8 @@ data class Product(
     val quantity: Double = 0.0,
     val minQuantity: Double = 0.0,
     val active: Boolean = true,
+    /** Sold by weight (kg, أوقية, ...): the cashier can type a weight or a money amount. */
+    @ColumnInfo(defaultValue = "0") val soldByWeight: Boolean = false,
     val createdAt: Long = now(),
     val updatedAt: Long = now(),
 )
@@ -85,7 +88,33 @@ data class Customer(
     val note: String = "",
     val createdAt: Long = now(),
     val updatedAt: Long = now(),
+    @ColumnInfo(defaultValue = "''") val address: String = "",
 )
+
+/** Store departments (أقسام المحل), e.g. مواد غذائية, ألبان, منظفات. */
+@Entity(tableName = "categories", indices = [Index(value = ["name"], unique = true)])
+data class Category(
+    @PrimaryKey val id: String = newId(),
+    val name: String,
+    val createdAt: Long = now(),
+    val updatedAt: Long = now(),
+)
+
+/** Where a transfer was received. */
+object TransferChannel {
+    const val BANK = "BANK"
+    const val MOBILE_WALLET = "MOBILE_WALLET"   // محفظة جوال
+    const val MAHFATHATI = "MAHFATHATI"         // محفظتي
+
+    val all = listOf(BANK, MOBILE_WALLET, MAHFATHATI)
+
+    fun label(c: String) = when (c) {
+        BANK -> "بنك"
+        MOBILE_WALLET -> "محفظة جوال"
+        MAHFATHATI -> "محفظتي"
+        else -> "تحويل"
+    }
+}
 
 object PaymentMethod {
     const val CASH = "CASH"
@@ -213,4 +242,8 @@ data class Payment(
     val reviewedAt: Long? = null,
     val createdAt: Long = now(),
     val updatedAt: Long = now(),
+    /** [TransferChannel] for transfers: bank, mobile wallet or محفظتي. */
+    @ColumnInfo(defaultValue = "''") val channel: String = "",
+    /** Phone number of the person who sent the transfer. */
+    @ColumnInfo(defaultValue = "''") val payerPhone: String = "",
 )

@@ -13,9 +13,10 @@ interface ProductDao {
         """SELECT * FROM products
            WHERE active = 1 AND (:q = '' OR name LIKE '%' || :q || '%'
                  OR barcode LIKE :q || '%' OR category LIKE '%' || :q || '%')
+             AND (:category = '' OR category = :category)
            ORDER BY name"""
     )
-    fun observeSearch(q: String): Flow<List<Product>>
+    fun observeSearch(q: String, category: String = ""): Flow<List<Product>>
 
     @Query("SELECT * FROM products WHERE active = 1 AND minQuantity > 0 AND quantity <= minQuantity ORDER BY name")
     fun observeLowStock(): Flow<List<Product>>
@@ -251,4 +252,158 @@ interface PaymentDao {
            WHERE p.customerId = :customerId ORDER BY p.createdAt DESC"""
     )
     fun observeForCustomer(customerId: String): Flow<List<PaymentRow>>
+}
+
+// ---------------------------------------------------------------- Departments
+
+data class CategoryWithCount(
+    @Embedded val category: Category,
+    val productCount: Int,
+)
+
+@Dao
+interface CategoryDao {
+    @Query(
+        """SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.category = c.name AND p.active = 1) AS productCount
+           FROM categories c ORDER BY c.name"""
+    )
+    fun observeWithCounts(): Flow<List<CategoryWithCount>>
+
+    @Query("SELECT * FROM categories ORDER BY name")
+    fun observeAll(): Flow<List<Category>>
+
+    @Query("SELECT * FROM categories WHERE name = :name LIMIT 1")
+    suspend fun findByName(name: String): Category?
+
+    @Insert
+    suspend fun insert(c: Category)
+
+    @Update
+    suspend fun update(c: Category)
+
+    @Query("DELETE FROM categories WHERE id = :id")
+    suspend fun delete(id: String)
+
+    @Query("UPDATE products SET category = :newName, updatedAt = :now WHERE category = :oldName")
+    suspend fun renameOnProducts(oldName: String, newName: String, now: Long)
+}
+
+// ---------------------------------------------------------------- Reports with filters
+
+/**
+ * Totals for a period. Each invoice's discount is shared across its items, so
+ * filtering by department still gives correct net amounts.
+ */
+data class ReportTotals(
+    val invoices: Int,
+    val sales: Double,
+    val discount: Double,
+    val cost: Double,
+)
+
+data class ReturnTotals(val amount: Long, val cost: Double)
+
+@Dao
+interface ReportDao {
+    @Query(
+        """SELECT COUNT(DISTINCT s.id) AS invoices,
+                  COALESCE(SUM(si.lineTotal * s.total * 1.0 / s.subtotal), 0) AS sales,
+                  COALESCE(SUM(si.lineTotal * s.discount * 1.0 / s.subtotal), 0) AS discount,
+                  COALESCE(SUM(si.unitCost * si.quantity), 0) AS cost
+           FROM sale_items si
+           JOIN sales s ON s.id = si.saleId
+           LEFT JOIN products p ON p.id = si.productId
+           WHERE s.subtotal > 0 AND s.createdAt BETWEEN :from AND :to
+             AND (:method = '' OR s.paymentMethod = :method)
+             AND (:category = '' OR p.category = :category)"""
+    )
+    fun totals(from: Long, to: Long, method: String, category: String): Flow<ReportTotals>
+
+    @Query(
+        """SELECT COALESCE(SUM(ri.amount), 0) AS amount,
+                  COALESCE(SUM(si.unitCost * ri.quantity), 0) AS cost
+           FROM sale_return_items ri
+           JOIN sale_returns r ON r.id = ri.returnId
+           JOIN sale_items si ON si.id = ri.saleItemId
+           JOIN sales s ON s.id = si.saleId
+           LEFT JOIN products p ON p.id = ri.productId
+           WHERE r.createdAt BETWEEN :from AND :to
+             AND (:method = '' OR s.paymentMethod = :method)
+             AND (:category = '' OR p.category = :category)"""
+    )
+    fun returns(from: Long, to: Long, method: String, category: String): Flow<ReturnTotals>
+
+    @Query(
+        """SELECT s.paymentMethod AS method,
+                  CAST(ROUND(SUM(si.lineTotal * s.total * 1.0 / s.subtotal)) AS INTEGER) AS amount,
+                  COUNT(DISTINCT s.id) AS count
+           FROM sale_items si
+           JOIN sales s ON s.id = si.saleId
+           LEFT JOIN products p ON p.id = si.productId
+           WHERE s.subtotal > 0 AND s.createdAt BETWEEN :from AND :to
+             AND (:method = '' OR s.paymentMethod = :method)
+             AND (:category = '' OR p.category = :category)
+           GROUP BY s.paymentMethod ORDER BY amount DESC"""
+    )
+    fun byMethod(from: Long, to: Long, method: String, category: String): Flow<List<MethodTotal>>
+
+    @Query(
+        """SELECT COALESCE(NULLIF(p.category, ''), 'بدون قسم') AS dept, COALESCE(NULLIF(p.category, ''), 'بدون قسم') AS name,
+                  SUM(si.quantity - si.returnedQuantity) AS quantity,
+                  CAST(ROUND(SUM(si.lineTotal * s.total * 1.0 / s.subtotal)) AS INTEGER) AS amount
+           FROM sale_items si
+           JOIN sales s ON s.id = si.saleId
+           LEFT JOIN products p ON p.id = si.productId
+           WHERE s.subtotal > 0 AND s.createdAt BETWEEN :from AND :to
+             AND (:method = '' OR s.paymentMethod = :method)
+             AND (:category = '' OR p.category = :category)
+           GROUP BY dept ORDER BY amount DESC"""
+    )
+    fun byCategory(from: Long, to: Long, method: String, category: String): Flow<List<TopProduct>>
+
+    @Query(
+        """SELECT si.productName AS name, SUM(si.quantity - si.returnedQuantity) AS quantity,
+                  CAST(ROUND(SUM(si.lineTotal * s.total * 1.0 / s.subtotal)) AS INTEGER) AS amount
+           FROM sale_items si
+           JOIN sales s ON s.id = si.saleId
+           LEFT JOIN products p ON p.id = si.productId
+           WHERE s.subtotal > 0 AND s.createdAt BETWEEN :from AND :to
+             AND (:method = '' OR s.paymentMethod = :method)
+             AND (:category = '' OR p.category = :category)
+           GROUP BY si.productId ORDER BY amount DESC LIMIT 10"""
+    )
+    fun topProducts(from: Long, to: Long, method: String, category: String): Flow<List<TopProduct>>
+}
+
+// ---------------------------------------------------------------- Customer debts
+
+/** A sale on credit and what is still owed on it after credit returns. */
+data class CreditInvoice(
+    val saleId: String,
+    val customerId: String,
+    val invoiceNo: Long,
+    val createdAt: Long,
+    val due: Long,
+)
+
+data class CustomerAmount(val customerId: String, val amount: Long)
+
+@Dao
+interface DebtDao {
+    @Query(
+        """SELECT s.id AS saleId, s.customerId AS customerId, s.invoiceNo AS invoiceNo, s.createdAt AS createdAt,
+                  s.total - COALESCE((SELECT SUM(r.amount) FROM sale_returns r
+                                      WHERE r.saleId = s.id AND r.refundMethod = 'CREDIT'), 0) AS due
+           FROM sales s
+           WHERE s.paymentMethod = 'CREDIT' AND s.customerId IS NOT NULL
+           ORDER BY s.createdAt, s.invoiceNo"""
+    )
+    fun observeCreditInvoices(): Flow<List<CreditInvoice>>
+
+    @Query(
+        """SELECT customerId, SUM(amount) AS amount FROM payments
+           WHERE kind = 'DEBT_COLLECTION' AND status != 'REJECTED' AND customerId IS NOT NULL
+           GROUP BY customerId"""
+    )
+    fun observeCollections(): Flow<List<CustomerAmount>>
 }

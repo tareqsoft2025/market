@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tareqsoft.market.Routes
+import com.tareqsoft.market.ui.AppIcons
 import com.tareqsoft.market.ui.Danger
 import com.tareqsoft.market.ui.Info
 import com.tareqsoft.market.ui.LocalContainer
@@ -102,6 +103,7 @@ fun HomeScreen(navigate: (String) -> Unit) {
                 Tile("التحصيلات والتحويلات", Icons.Filled.CheckCircle, Routes.COLLECTIONS, Info),
                 Tile("العملاء والديون", Icons.Filled.Person, Routes.CUSTOMERS, Color(0xFF6A1B9A)),
                 Tile("التقارير", Icons.Filled.Star, Routes.REPORTS, Warning),
+                Tile("أقسام المحل", AppIcons.Departments, Routes.CATEGORIES, Color(0xFF455A64)),
                 Tile("الإعدادات والنسخ الاحتياطي", Icons.Filled.Settings, Routes.SETTINGS, Color.DarkGray),
             )
             tiles.chunked(2).forEach { row ->

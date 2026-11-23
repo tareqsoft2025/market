@@ -1,5 +1,6 @@
 package com.tareqsoft.market.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,6 +48,9 @@ import com.tareqsoft.market.ui.ConfirmDialog
 import com.tareqsoft.market.ui.Danger
 import com.tareqsoft.market.ui.LabelValue
 import com.tareqsoft.market.ui.LocalContainer
+import com.tareqsoft.market.ui.DropdownField
+import com.tareqsoft.market.ui.TextInputDialog
+import com.tareqsoft.market.ui.UNIT_SUGGESTIONS
 import com.tareqsoft.market.ui.BottomSpacer
 import com.tareqsoft.market.ui.PrimaryActionButton
 import com.tareqsoft.market.ui.NumberField
@@ -57,6 +62,8 @@ import com.tareqsoft.market.util.Money
 import com.tareqsoft.market.util.Qty
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+
+private val WEIGHT_UNITS = setOf("كجم", "جرام", "أوقية", "رطل")
 
 @Composable
 fun ProductEditScreen(productId: String, onBack: () -> Unit) {
@@ -73,6 +80,10 @@ fun ProductEditScreen(productId: String, onBack: () -> Unit) {
     var price by rememberSaveable { mutableStateOf("") }
     var openingQty by rememberSaveable { mutableStateOf("") }
     var minQty by rememberSaveable { mutableStateOf("") }
+    var soldByWeight by rememberSaveable { mutableStateOf(false) }
+    var addingCategory by remember { mutableStateOf(false) }
+    var categoryError by remember { mutableStateOf<String?>(null) }
+    val categories by remember { repo.categories.observeAll() }.collectAsStateWithLifecycle(emptyList())
     var loaded by rememberSaveable { mutableStateOf(isNew) }
 
     var showReceive by remember { mutableStateOf(false) }
@@ -96,6 +107,7 @@ fun ProductEditScreen(productId: String, onBack: () -> Unit) {
                 cost = Money.toInput(p.costPrice)
                 price = Money.toInput(p.salePrice)
                 minQty = Qty.format(p.minQuantity)
+                soldByWeight = p.soldByWeight
             }
             loaded = true
         }
@@ -118,8 +130,9 @@ fun ProductEditScreen(productId: String, onBack: () -> Unit) {
                     repo.addProduct(
                         Product(
                             name = name.trim(), barcode = barcode.trim().ifBlank { null },
-                            category = category.trim(), unit = unit.trim().ifBlank { "حبة" },
+                            category = category.trim().takeUnless { it == "بدون قسم" } ?: "", unit = unit.trim().ifBlank { "حبة" },
                             costPrice = costV, salePrice = priceV, quantity = openV, minQuantity = minV,
+                            soldByWeight = soldByWeight,
                         )
                     )
                 } else {
@@ -127,8 +140,9 @@ fun ProductEditScreen(productId: String, onBack: () -> Unit) {
                     repo.updateProduct(
                         old.copy(
                             name = name.trim(), barcode = barcode.trim().ifBlank { null },
-                            category = category.trim(), unit = unit.trim().ifBlank { "حبة" },
+                            category = category.trim().takeUnless { it == "بدون قسم" } ?: "", unit = unit.trim().ifBlank { "حبة" },
                             costPrice = costV, salePrice = priceV, minQuantity = minV,
+                            soldByWeight = soldByWeight,
                         )
                     )
                 }
@@ -180,9 +194,40 @@ fun ProductEditScreen(productId: String, onBack: () -> Unit) {
                 trailingIcon = { IconButton(onClick = scan) { Text("📷") } },
                 modifier = Modifier.fillMaxWidth(),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(category, { category = it }, label = { Text("التصنيف") }, singleLine = true, modifier = Modifier.weight(1f))
-                OutlinedTextField(unit, { unit = it }, label = { Text("الوحدة") }, singleLine = true, modifier = Modifier.weight(0.6f))
+            DropdownField(
+                value = category,
+                onValueChange = { category = it },
+                options = listOf("بدون قسم") + categories.map { it.name },
+                label = "القسم",
+                placeholder = "اختر القسم",
+                footer = "+ إضافة قسم جديد" to { addingCategory = true },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                DropdownField(
+                    value = unit,
+                    onValueChange = {
+                        unit = it
+                        if (it in WEIGHT_UNITS) soldByWeight = true
+                    },
+                    options = UNIT_SUGGESTIONS,
+                    label = "وحدة البيع",
+                    editable = true,
+                    modifier = Modifier.weight(1f),
+                )
+                Row(
+                    Modifier.weight(1f).clickable { soldByWeight = !soldByWeight },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = soldByWeight, onCheckedChange = { soldByWeight = it })
+                    Text("يباع بالوزن")
+                }
+            }
+            if (soldByWeight) {
+                Text(
+                    "عند البيع تكتب الوزن أو المبلغ الذي يريده الزبون، ويُحسب الآخر تلقائياً.",
+                    style = MaterialTheme.typography.bodySmall, color = Color.Gray,
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NumberField(cost, { cost = it }, "سعر الشراء (التكلفة)", Modifier.weight(1f))
@@ -211,6 +256,28 @@ fun ProductEditScreen(productId: String, onBack: () -> Unit) {
             }
             BottomSpacer()
         }
+    }
+
+    if (addingCategory) {
+        TextInputDialog(
+            title = "قسم جديد",
+            label = "اسم القسم",
+            confirmText = "إضافة",
+            error = categoryError,
+            onConfirm = { n ->
+                scope.launch {
+                    try {
+                        repo.addCategory(n)
+                        category = n.trim()
+                        addingCategory = false
+                        categoryError = null
+                    } catch (e: Exception) {
+                        categoryError = e.message
+                    }
+                }
+            },
+            onDismiss = { addingCategory = false; categoryError = null },
+        )
     }
 
     if (showReceive && live != null) {

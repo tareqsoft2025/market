@@ -32,6 +32,12 @@ class FormatTest {
         assertEquals("2", Qty.format(2.0))
         assertEquals("1.25", Qty.format(1.25))
         assertEquals(1.5, Qty.parse("1٫5")!!, 0.0001)
+        assertEquals(0.5, Qty.parse("1/2")!!, 0.0001)
+        assertEquals(1.25, Qty.parse("1 1/4")!!, 0.0001)
+        assertNull(Qty.parse("1/0"))
+        // Weight from amount: 20 at 5 per أوقية = 4
+        assertEquals("4", Qty.format(Money.parse("20")!!.toDouble() / Money.parse("5")!!))
+        assertEquals("3.333", Qty.format(Money.parse("10")!!.toDouble() / Money.parse("3")!!))
     }
 
     @Test

@@ -63,6 +63,9 @@ import com.tareqsoft.market.data.MarketRepository
 import com.tareqsoft.market.data.PaymentMethod
 import com.tareqsoft.market.data.Product
 import com.tareqsoft.market.data.Sale
+import com.tareqsoft.market.data.TransferInfo
+import com.tareqsoft.market.ui.TransferFields
+import com.tareqsoft.market.ui.TransferFormState
 import com.tareqsoft.market.ui.ChipSelector
 import com.tareqsoft.market.ui.Danger
 import com.tareqsoft.market.ui.EmptyState
@@ -88,10 +91,18 @@ class PosViewModel(private val repo: MarketRepository) : ViewModel() {
     val discount: Long get() = Money.parse(discountText)?.coerceIn(0, subtotal) ?: 0
     val total: Long get() = subtotal - discount
 
-    fun add(p: Product, qty: Double = 1.0) {
+    /** Item sold by weight waiting for the cashier to enter a weight or an amount. */
+    var weighing by mutableStateOf<Product?>(null)
+
+    fun add(p: Product, qty: Double = 1.0, price: Long = p.salePrice) {
         val i = cart.indexOfFirst { it.product.id == p.id }
         if (i >= 0) cart[i] = cart[i].copy(quantity = cart[i].quantity + qty)
-        else cart.add(CartLine(p, qty))
+        else cart.add(CartLine(p, qty, price))
+    }
+
+    /** Pieces go straight into the cart; weighed items first ask for the weight or amount. */
+    fun addOrWeigh(p: Product) {
+        if (p.soldByWeight) weighing = p else add(p)
     }
 
     fun setQty(line: CartLine, qty: Double) {
@@ -108,7 +119,7 @@ class PosViewModel(private val repo: MarketRepository) : ViewModel() {
     /** Called when Enter is pressed (USB / Bluetooth barcode scanners send Enter). */
     suspend fun addByBarcode(code: String): Boolean {
         val p = repo.products.findByBarcode(code.trim()) ?: return false
-        add(p)
+        addOrWeigh(p)
         return true
     }
 
@@ -146,7 +157,7 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
             if (vm.addByBarcode(q)) return@launch
             val byName = matches.filter { it.name.contains(q) || it.barcode == q }
             when {
-                byName.size == 1 -> vm.add(byName.first())
+                byName.size == 1 -> vm.addOrWeigh(byName.first())
                 byName.isEmpty() -> snackbar.showSnackbar("لا يوجد صنف بهذا الباركود: $q")
                 else -> vm.query = q // several matches: keep the text so the user can pick
             }
@@ -228,7 +239,7 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
                                 Text("المتوفر: ${Qty.format(p.quantity)} ${p.unit}", style = MaterialTheme.typography.bodySmall, color = if (p.quantity <= 0) Danger else Color.Gray)
                             }
                             Text(money(p.salePrice))
-                            IconButton(onClick = { vm.add(p); vm.query = "" }) { Icon(Icons.Filled.Add, "إضافة") }
+                            IconButton(onClick = { vm.addOrWeigh(p); vm.query = "" }) { Icon(Icons.Filled.Add, "إضافة") }
                         }
                         HorizontalDivider()
                     }
@@ -256,8 +267,10 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
     }
 
     editLine?.let { line ->
-        EditLineDialog(
-            line = line,
+        QuantityDialog(
+            product = line.product,
+            unitPrice = line.unitPrice,
+            initialQty = line.quantity,
             onDismiss = { editLine = null },
             onSave = { qty, price ->
                 vm.setPrice(line, price)
@@ -267,11 +280,24 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
         )
     }
 
+    vm.weighing?.let { p ->
+        QuantityDialog(
+            product = p,
+            unitPrice = p.salePrice,
+            initialQty = null,
+            onDismiss = { vm.weighing = null },
+            onSave = { qty, price ->
+                if (qty > 0) vm.add(p, qty, price)
+                vm.weighing = null
+            },
+        )
+    }
+
     if (checkout) {
         CheckoutDialog(
             total = vm.total,
             onDismiss = { checkout = false },
-            onConfirm = { method, customer, bankName, ref, received ->
+            onConfirm = { method, customer, transfer, received ->
                 scope.launch {
                     try {
                         val sale = repo.createSale(
@@ -279,8 +305,7 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
                             discount = vm.discount,
                             method = method,
                             customerId = customer?.id,
-                            bankName = bankName,
-                            reference = ref,
+                            transfer = transfer,
                             note = "",
                         )
                         checkout = false
@@ -330,26 +355,83 @@ private fun CartRow(line: CartLine, onMinus: () -> Unit, onPlus: () -> Unit, onE
     }
 }
 
+/**
+ * Quantity / weight entry. The weight and the amount are linked: typing the
+ * amount the customer wants to pay divides it by the unit price (20 ÷ 5 = 4
+ * أوقية), and typing the weight multiplies it.
+ */
 @Composable
-private fun EditLineDialog(line: CartLine, onDismiss: () -> Unit, onSave: (Double, Long) -> Unit) {
-    var qty by remember { mutableStateOf(Qty.format(line.quantity)) }
-    var price by remember { mutableStateOf(Money.toInput(line.unitPrice)) }
+private fun QuantityDialog(
+    product: Product,
+    unitPrice: Long,
+    initialQty: Double?,
+    onDismiss: () -> Unit,
+    onSave: (Double, Long) -> Unit,
+) {
+    var price by remember { mutableStateOf(Money.toInput(unitPrice)) }
+    var qty by remember { mutableStateOf(initialQty?.let { Qty.format(it) } ?: "") }
+    var amount by remember {
+        mutableStateOf(initialQty?.let { Money.toInput(Math.round(unitPrice * it)) } ?: "")
+    }
+    val p = Money.parse(price)
+
+    fun fromQty(text: String) {
+        qty = text
+        val q = Qty.parse(text)
+        amount = if (q != null && p != null) Money.toInput(Math.round(p * q)) else ""
+    }
+    fun fromAmount(text: String) {
+        amount = text
+        val a = Money.parse(text)
+        qty = if (a != null && p != null && p > 0) Qty.format(a.toDouble() / p) else ""
+    }
+
+    val weighed = product.soldByWeight
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(line.product.name) },
+        title = { Text(product.name) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                NumberField(qty, { qty = it }, "الكمية (أو الوزن)")
-                NumberField(price, { price = it }, "سعر الوحدة")
-                Text("ضع الكمية 0 لحذف الصنف من السلة", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "السعر: ${money(p ?: unitPrice)} لكل ${product.unit}",
+                    style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+                )
+                NumberField(qty, { fromQty(it) }, if (weighed) "الوزن (${product.unit})" else "الكمية")
+                if (weighed) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("1/4" to "¼", "1/2" to "½", "3/4" to "¾", "1" to "1", "2" to "2").forEach { (v, label) ->
+                            OutlinedButton(
+                                onClick = { fromQty(v) },
+                                contentPadding = PaddingValues(horizontal = 4.dp),
+                                modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                            ) { Text(label, style = MaterialTheme.typography.titleMedium) }
+                        }
+                    }
+                }
+                NumberField(amount, { fromAmount(it) }, "المبلغ المطلوب")
+                if (weighed) {
+                    Text(
+                        "اكتب المبلغ الذي يريده الزبون ويُحسب الوزن تلقائياً، أو اكتب الوزن ويُحسب المبلغ.",
+                        style = MaterialTheme.typography.bodySmall, color = Color.Gray,
+                    )
+                }
+                NumberField(price, {
+                    price = it
+                    val np = Money.parse(it)
+                    val q = Qty.parse(qty)
+                    if (np != null && q != null) amount = Money.toInput(Math.round(np * q))
+                }, "سعر ${product.unit}")
+                if (initialQty != null) {
+                    Text("ضع الكمية 0 لحذف الصنف من السلة", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                val q = Qty.parse(qty) ?: return@TextButton
-                val p = Money.parse(price) ?: return@TextButton
-                onSave(q, p)
-            }) { Text("حفظ") }
+            Button(onClick = {
+                val q = Qty.parse(qty) ?: return@Button
+                val pr = Money.parse(price) ?: return@Button
+                onSave(q, pr)
+            }) { Text(if (initialQty == null) "إضافة للسلة" else "حفظ") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } },
     )
@@ -359,12 +441,11 @@ private fun EditLineDialog(line: CartLine, onDismiss: () -> Unit, onSave: (Doubl
 private fun CheckoutDialog(
     total: Long,
     onDismiss: () -> Unit,
-    onConfirm: (method: String, customer: Customer?, bankName: String, ref: String, received: Long?) -> Unit,
+    onConfirm: (method: String, customer: Customer?, transfer: TransferInfo?, received: Long?) -> Unit,
 ) {
     var method by remember { mutableStateOf(PaymentMethod.CASH) }
     var received by remember { mutableStateOf("") }
-    var bankName by remember { mutableStateOf("") }
-    var ref by remember { mutableStateOf("") }
+    val transfer = remember { TransferFormState() }
     var customer by remember { mutableStateOf<Customer?>(null) }
     var pickCustomer by remember { mutableStateOf(false) }
 
@@ -388,11 +469,7 @@ private fun CheckoutDialog(
                             LabelValue(if (change >= 0) "الباقي" else "ناقص", money(kotlin.math.abs(change)), if (change < 0) Danger else Warning, true)
                         }
                     }
-                    PaymentMethod.BANK -> {
-                        OutlinedTextField(bankName, { bankName = it }, label = { Text("البنك / المحفظة") }, singleLine = true)
-                        OutlinedTextField(ref, { ref = it }, label = { Text("رقم مرجع التحويل *") }, singleLine = true)
-                        Text("سيظهر التحويل في شاشة المراجعة حتى يتم تأكيده.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    }
+                    PaymentMethod.BANK -> TransferFields(transfer)
                 }
                 if (method == PaymentMethod.CREDIT || customer != null) {
                     OutlinedButton(onClick = { pickCustomer = true }, modifier = Modifier.fillMaxWidth()) {
@@ -410,7 +487,7 @@ private fun CheckoutDialog(
         },
         confirmButton = {
             Button(onClick = {
-                onConfirm(method, customer, bankName.trim(), ref.trim(), Money.parse(received))
+                onConfirm(method, customer, if (method == PaymentMethod.BANK) transfer.toInfo() else null, Money.parse(received))
             }) { Text("تأكيد البيع") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("رجوع") } },
