@@ -11,7 +11,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.tareqsoft.market.ui.MandatoryUpdateGate
 import com.tareqsoft.market.ui.MarketTheme
+import com.tareqsoft.market.ui.screens.CategoriesScreen
 import com.tareqsoft.market.ui.screens.CollectionsScreen
 import com.tareqsoft.market.ui.screens.CustomerDetailScreen
 import com.tareqsoft.market.ui.screens.CustomersScreen
@@ -28,6 +30,8 @@ import com.tareqsoft.market.ui.screens.SettingsScreen
 object Routes {
     const val HOME = "home"
     const val PRODUCTS = "products"
+    const val PRODUCTS_PATTERN = "products?category={category}"
+    const val CATEGORIES = "categories"
     const val PRODUCT = "product/{id}"
     const val POS = "pos"
     const val SALES = "sales"
@@ -40,6 +44,7 @@ object Routes {
     const val SETTINGS = "settings"
 
     fun product(id: String) = "product/$id"
+    fun productsIn(category: String) = "products?category=${android.net.Uri.encode(category)}"
     fun sale(id: String) = "sale/$id"
     fun saleReturn(saleId: String) = "return/$saleId"
     fun customer(id: String) = "customer/$id"
@@ -61,15 +66,25 @@ class MainActivity : ComponentActivity() {
                 // Each time the app opens: look for a new version and download it
                 // in the background, so the user only has to tap "Install".
                 LaunchedEffect(Unit) { container.updater.checkAndDownload() }
+                // A mandatory update covers the whole app until it is installed.
+                MandatoryUpdateGate()
 
                 NavHost(navController = nav, startDestination = Routes.HOME) {
                     composable(Routes.HOME) { HomeScreen(navigate = { nav.navigate(it) }) }
-                    composable(Routes.PRODUCTS) {
+                    composable(
+                        Routes.PRODUCTS_PATTERN,
+                        listOf(navArgument("category") { type = NavType.StringType; defaultValue = "" }),
+                    ) {
                         ProductsScreen(
                             onBack = back,
                             onOpen = { nav.navigate(Routes.product(it)) },
                             onNew = { nav.navigate(Routes.product(Routes.NEW)) },
+                            onDepartments = { nav.navigate(Routes.CATEGORIES) },
+                            initialCategory = it.arguments?.getString("category") ?: "",
                         )
+                    }
+                    composable(Routes.CATEGORIES) {
+                        CategoriesScreen(onBack = back, onOpenCategory = { c -> nav.navigate(Routes.productsIn(c)) })
                     }
                     composable(Routes.PRODUCT, listOf(navArgument("id") { type = NavType.StringType })) {
                         ProductEditScreen(productId = it.arguments?.getString("id") ?: Routes.NEW, onBack = back)

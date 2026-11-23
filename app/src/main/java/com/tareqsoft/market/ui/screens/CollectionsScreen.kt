@@ -1,6 +1,11 @@
 package com.tareqsoft.market.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -37,6 +42,8 @@ import com.tareqsoft.market.data.PaymentKind
 import com.tareqsoft.market.data.PaymentMethod
 import com.tareqsoft.market.data.PaymentRow
 import com.tareqsoft.market.data.PaymentStatus
+import com.tareqsoft.market.data.TransferChannel
+import com.tareqsoft.market.ui.AppIcons
 import com.tareqsoft.market.ui.ChipSelector
 import com.tareqsoft.market.ui.Danger
 import com.tareqsoft.market.ui.DayNavigator
@@ -187,9 +194,22 @@ private fun PaymentCard(
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
+                val transfer = p.method == PaymentMethod.BANK
+                Box(
+                    Modifier.size(40.dp).background(
+                        (if (transfer) Info else MaterialTheme.colorScheme.primary).copy(alpha = 0.12f), CircleShape,
+                    ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        if (transfer) AppIcons.forChannel(p.channel) else AppIcons.Wallet, null,
+                        tint = if (transfer) Info else MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp),
+                    )
+                }
+                Column(Modifier.weight(1f).padding(start = 10.dp)) {
                     Text(
-                        "${PaymentKind.label(p.kind)} • ${PaymentMethod.label(p.method)}",
+                        "${PaymentKind.label(p.kind)} • " +
+                            if (transfer) TransferChannel.label(p.channel) else PaymentMethod.label(p.method),
                         fontWeight = FontWeight.Bold,
                     )
                     val details = listOfNotNull(
@@ -197,10 +217,11 @@ private fun PaymentCard(
                         row.invoiceNo?.let { "فاتورة #$it" },
                         row.customerName,
                         p.bankName.ifBlank { null },
+                        p.payerPhone.ifBlank { null }?.let { "جوال: $it" },
                         p.reference.ifBlank { null }?.let { "مرجع: $it" },
                     ).joinToString(" • ")
                     Text(details, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    if (p.note.isNotBlank()) Text(p.note, style = MaterialTheme.typography.bodySmall)
+                    if (p.note.isNotBlank()) Text("ملاحظة: ${p.note}", style = MaterialTheme.typography.bodySmall)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(

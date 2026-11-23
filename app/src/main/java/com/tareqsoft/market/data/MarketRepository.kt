@@ -13,6 +13,15 @@ data class CartLine(
     val total: Long get() = (unitPrice * quantity).roundToLong()
 }
 
+/** Details of a bank or wallet transfer. */
+data class TransferInfo(
+    val channel: String = TransferChannel.BANK,
+    val bankName: String = "",
+    val reference: String = "",
+    val payerPhone: String = "",
+    val note: String = "",
+)
+
 data class ReturnLine(
     val saleItem: SaleItem,
     val quantity: Double,
@@ -29,11 +38,15 @@ class MarketRepository(private val db: MarketDatabase) {
     val customers = db.customerDao()
     val sales = db.saleDao()
     val payments = db.paymentDao()
+    val categories = db.categoryDao()
+    val reports = db.reportDao()
+    val debts = db.debtDao()
 
     // ------------------------------------------------------------ Products
 
     suspend fun addProduct(p: Product) = db.withTransaction {
         validateProduct(p)
+        ensureCategory(p.category)
         products.insert(p)
         if (p.quantity != 0.0) {
             movements.insert(
@@ -50,12 +63,17 @@ class MarketRepository(private val db: MarketDatabase) {
     suspend fun updateProduct(p: Product) = db.withTransaction {
         validateProduct(p)
         val old = products.get(p.id) ?: throw BusinessException("الصنف غير موجود")
+        ensureCategory(p.category)
         products.update(p.copy(quantity = old.quantity, createdAt = old.createdAt, updatedAt = now()))
     }
 
     suspend fun archiveProduct(id: String) = db.withTransaction {
         val p = products.get(id) ?: return@withTransaction
         products.update(p.copy(active = false, updatedAt = now()))
+    }
+
+    private suspend fun ensureCategory(name: String) {
+        if (name.isNotBlank() && categories.findByName(name) == null) categories.insert(Category(name = name))
     }
 
     private suspend fun validateProduct(p: Product) {
@@ -111,19 +129,51 @@ class MarketRepository(private val db: MarketDatabase) {
 
     suspend fun collectDebt(
         customerId: String, amount: Long, method: String,
-        bankName: String, reference: String, note: String,
+        transfer: TransferInfo? = null, note: String = "",
     ) = db.withTransaction {
         if (amount <= 0) throw BusinessException("المبلغ يجب أن يكون أكبر من صفر")
-        if (method == PaymentMethod.BANK && reference.isBlank()) {
-            throw BusinessException("رقم مرجع التحويل مطلوب")
-        }
+        val t = if (method == PaymentMethod.BANK) validTransfer(transfer) else TransferInfo(channel = "")
         payments.insert(
             Payment(
                 kind = PaymentKind.DEBT_COLLECTION, method = method, amount = amount,
                 status = if (method == PaymentMethod.BANK) PaymentStatus.PENDING else PaymentStatus.CONFIRMED,
-                customerId = customerId, bankName = bankName, reference = reference, note = note,
+                customerId = customerId, bankName = t.bankName, reference = t.reference,
+                channel = t.channel, payerPhone = t.payerPhone,
+                note = listOf(note, t.note).filter { it.isNotBlank() }.joinToString(" - "),
             )
         )
+    }
+
+    private fun validTransfer(t: TransferInfo?): TransferInfo {
+        if (t == null || (t.reference.isBlank() && t.payerPhone.isBlank())) {
+            throw BusinessException("أدخل رقم مرجع التحويل أو رقم جوال المحوِّل")
+        }
+        return t
+    }
+
+    // ------------------------------------------------------------ Departments
+
+    suspend fun addCategory(name: String) = db.withTransaction {
+        val n = name.trim()
+        if (n.isEmpty()) throw BusinessException("اسم القسم مطلوب")
+        if (categories.findByName(n) != null) throw BusinessException("القسم \"$n\" موجود مسبقاً")
+        categories.insert(Category(name = n))
+    }
+
+    /** Renames a department and moves all its items to the new name. */
+    suspend fun renameCategory(c: Category, newName: String) = db.withTransaction {
+        val n = newName.trim()
+        if (n.isEmpty()) throw BusinessException("اسم القسم مطلوب")
+        if (n == c.name) return@withTransaction
+        if (categories.findByName(n) != null) throw BusinessException("القسم \"$n\" موجود مسبقاً")
+        categories.update(c.copy(name = n, updatedAt = now()))
+        categories.renameOnProducts(c.name, n, now())
+    }
+
+    /** Deletes a department; its items stay, without a department. */
+    suspend fun deleteCategory(c: Category) = db.withTransaction {
+        categories.delete(c.id)
+        categories.renameOnProducts(c.name, "", now())
     }
 
     // ------------------------------------------------------------ Sales
@@ -133,9 +183,8 @@ class MarketRepository(private val db: MarketDatabase) {
         discount: Long,
         method: String,
         customerId: String?,
-        bankName: String,
-        reference: String,
-        note: String,
+        transfer: TransferInfo? = null,
+        note: String = "",
     ): Sale = db.withTransaction {
         if (lines.isEmpty()) throw BusinessException("السلة فارغة")
         if (lines.any { it.quantity <= 0 }) throw BusinessException("كمية غير صحيحة في السلة")
@@ -144,9 +193,7 @@ class MarketRepository(private val db: MarketDatabase) {
         if (method == PaymentMethod.CREDIT && customerId == null) {
             throw BusinessException("اختر العميل للبيع الآجل")
         }
-        if (method == PaymentMethod.BANK && reference.isBlank()) {
-            throw BusinessException("رقم مرجع التحويل مطلوب")
-        }
+        val t = if (method == PaymentMethod.BANK) validTransfer(transfer) else TransferInfo(channel = "")
 
         val sale = Sale(
             invoiceNo = sales.nextInvoiceNo(),
@@ -184,7 +231,8 @@ class MarketRepository(private val db: MarketDatabase) {
                     kind = PaymentKind.SALE, method = method, amount = sale.total,
                     status = if (method == PaymentMethod.BANK) PaymentStatus.PENDING else PaymentStatus.CONFIRMED,
                     saleId = sale.id, customerId = customerId,
-                    bankName = bankName, reference = reference,
+                    bankName = t.bankName, reference = t.reference,
+                    channel = t.channel, payerPhone = t.payerPhone, note = t.note,
                 )
             )
         }

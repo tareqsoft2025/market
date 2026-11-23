@@ -21,6 +21,8 @@ data class ReleaseInfo(
     val notes: String,
     val apkUrl: String,
     val apkSize: Long,
+    /** The app must be updated before it can be used again. */
+    val mandatory: Boolean = false,
 )
 
 sealed interface UpdateState {
@@ -30,7 +32,7 @@ sealed interface UpdateState {
     data class Available(val release: ReleaseInfo) : UpdateState
     data class Downloading(val release: ReleaseInfo, val progress: Float) : UpdateState
     data class ReadyToInstall(val release: ReleaseInfo, val file: File) : UpdateState
-    data class Failed(val message: String) : UpdateState
+    data class Failed(val message: String, val release: ReleaseInfo? = null) : UpdateState
 }
 
 /**
@@ -100,11 +102,16 @@ class Updater(private val context: Context) {
             if (conn.responseCode == 404) return@withContext null
             if (conn.responseCode != 200) throw IllegalStateException("HTTP ${conn.responseCode}")
             val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            val version = json.getString("version").removePrefix("v")
+            val minVersion = json.optString("minVersion", "")
             ReleaseInfo(
-                version = json.getString("version").removePrefix("v"),
+                version = version,
                 notes = json.optString("notes", ""),
                 apkUrl = json.getString("apkUrl"),
                 apkSize = json.optLong("size"),
+                // Either the whole release is mandatory, or versions older than minVersion must update.
+                mandatory = json.optBoolean("mandatory", false) ||
+                    (minVersion.isNotEmpty() && isNewer(minVersion, currentVersion)),
             )
         } finally {
             conn.disconnect()
@@ -189,7 +196,7 @@ class Updater(private val context: Context) {
             }
             _state.value = UpdateState.ReadyToInstall(release, file)
         } catch (e: Exception) {
-            _state.value = UpdateState.Failed("فشل تنزيل التحديث: ${e.message ?: ""}")
+            _state.value = UpdateState.Failed("فشل تنزيل التحديث: ${e.message ?: ""}", release)
         }
     }
 

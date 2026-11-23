@@ -9,6 +9,7 @@ data class StoreSettings(
     val storeName: String,
     val currency: String,
     val deviceId: String,
+    val smsTemplate: String,
 )
 
 /** Small key/value settings. Kept in SharedPreferences (survives app updates). */
@@ -29,6 +30,7 @@ class Settings(context: Context) {
             storeName = prefs.getString(KEY_STORE, "سوبر ماركت") ?: "سوبر ماركت",
             currency = prefs.getString(KEY_CURRENCY, "") ?: "",
             deviceId = deviceId,
+            smsTemplate = prefs.getString(KEY_SMS, null) ?: Sms.DEFAULT_TEMPLATE,
         )
     }
 
@@ -40,7 +42,13 @@ class Settings(context: Context) {
         _state.value = read()
     }
 
+    fun saveSmsTemplate(template: String) {
+        prefs.edit().putString(KEY_SMS, template.trim().ifBlank { Sms.DEFAULT_TEMPLATE }).apply()
+        _state.value = read()
+    }
+
     private companion object {
+        const val KEY_SMS = "sms_template"
         const val KEY_STORE = "store_name"
         const val KEY_CURRENCY = "currency"
         const val KEY_DEVICE = "device_id"

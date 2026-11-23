@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tareqsoft.market.data.Product
+import com.tareqsoft.market.ui.AppIcons
 import com.tareqsoft.market.ui.ChipSelector
 import com.tareqsoft.market.ui.Danger
 import com.tareqsoft.market.ui.EmptyState
@@ -45,13 +46,21 @@ import com.tareqsoft.market.ui.rememberBarcodeScanner
 import com.tareqsoft.market.util.Qty
 
 @Composable
-fun ProductsScreen(onBack: () -> Unit, onOpen: (String) -> Unit, onNew: () -> Unit) {
+fun ProductsScreen(
+    onBack: () -> Unit,
+    onOpen: (String) -> Unit,
+    onNew: () -> Unit,
+    onDepartments: () -> Unit = {},
+    initialCategory: String = "",
+) {
     val repo = LocalContainer.current.repo
     var query by rememberSaveable { mutableStateOf("") }
     var lowOnly by rememberSaveable { mutableStateOf(false) }
+    var category by rememberSaveable { mutableStateOf(initialCategory) }
+    val categories by remember { repo.categories.observeAll() }.collectAsStateWithLifecycle(emptyList())
 
-    val flow = remember(query, lowOnly) {
-        if (lowOnly) repo.products.observeLowStock() else repo.products.observeSearch(query.trim())
+    val flow = remember(query, lowOnly, category) {
+        if (lowOnly) repo.products.observeLowStock() else repo.products.observeSearch(query.trim(), category)
     }
     val products by flow.collectAsStateWithLifecycle(emptyList())
     val count by remember { repo.products.observeCount() }.collectAsStateWithLifecycle(0)
@@ -66,6 +75,9 @@ fun ProductsScreen(onBack: () -> Unit, onOpen: (String) -> Unit, onNew: () -> Un
     ScreenScaffold(
         title = "المخزن والأصناف",
         onBack = onBack,
+        actions = {
+            IconButton(onClick = onDepartments) { Icon(AppIcons.Departments, "أقسام المحل") }
+        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onNew,
@@ -95,11 +107,26 @@ fun ProductsScreen(onBack: () -> Unit, onOpen: (String) -> Unit, onNew: () -> Un
                 },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
             )
+            // One row of filters: all / low stock / each department.
+            val filters = listOf("__all", "__low") + categories.map { it.name }
             ChipSelector(
-                options = listOf(false, true),
-                selected = lowOnly,
-                label = { if (it) "تحت حد الطلب ($lowCount)" else "كل الأصناف" },
-                onSelect = { lowOnly = it },
+                options = filters,
+                selected = when {
+                    lowOnly -> "__low"
+                    category.isNotEmpty() -> category
+                    else -> "__all"
+                },
+                label = {
+                    when (it) {
+                        "__all" -> "كل الأصناف"
+                        "__low" -> "تحت حد الطلب ($lowCount)"
+                        else -> it
+                    }
+                },
+                onSelect = {
+                    lowOnly = it == "__low"
+                    category = if (it.startsWith("__")) "" else it
+                },
                 modifier = Modifier.padding(horizontal = 12.dp),
             )
             if (products.isEmpty()) {

@@ -38,8 +38,22 @@ object Qty {
         return if (bd.scale() <= 0) bd.setScale(0).toPlainString() else bd.toPlainString()
     }
 
-    fun parse(text: String): Double? =
-        normalizeDigits(text).trim().replace(',', '.').toDoubleOrNull()
+    /** Accepts "1.5", "1,5", Arabic digits and fractions such as "1/2" or "1 1/2". */
+    fun parse(text: String): Double? {
+        val t = normalizeDigits(text).trim().replace(',', '.').replace('\u2044', '/')
+        if (t.isEmpty()) return null
+        if ('/' in t) {
+            val parts = t.split(' ').filter { it.isNotBlank() }
+            val whole = if (parts.size == 2) parts[0].toDoubleOrNull() ?: return null else 0.0
+            val frac = parts.last().split('/')
+            if (frac.size != 2) return null
+            val num = frac[0].toDoubleOrNull() ?: return null
+            val den = frac[1].toDoubleOrNull() ?: return null
+            if (den == 0.0) return null
+            return whole + num / den
+        }
+        return t.toDoubleOrNull()
+    }
 }
 
 /** Converts Arabic-Indic digits (٠-٩, ۰-۹) and Arabic decimal separator to ASCII. */

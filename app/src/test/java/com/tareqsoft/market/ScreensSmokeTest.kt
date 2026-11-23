@@ -25,7 +25,8 @@ class ScreensSmokeTest {
     private fun openAndBack(tile: String, expected: String, substring: Boolean = false) {
         rule.onNodeWithText(tile).performScrollTo().performClick()
         rule.waitForIdle()
-        rule.onAllNodesWithText(expected, substring = substring)[0].assertExists()
+        // Lists load from the database a moment after the screen opens.
+        rule.waitUntil(5_000) { rule.onAllNodesWithText(expected, substring = substring).fetchSemanticsNodes().isNotEmpty() }
         rule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         rule.waitForIdle()
     }
@@ -37,7 +38,8 @@ class ScreensSmokeTest {
         openAndBack("المخزن والأصناف", "عدد الأصناف")
         openAndBack("الفواتير والمردودات", "لا توجد فواتير")
         openAndBack("التحصيلات والتحويلات", "حركة الصندوق اليومية")
-        openAndBack("العملاء والديون", "إجمالي الديون على العملاء")
+        openAndBack("العملاء والديون", "ديون كل العملاء")
+        openAndBack("أقسام المحل", "ألبان وأجبان")
         openAndBack("التقارير", "الأكثر مبيعاً")
         openAndBack("الإعدادات والنسخ الاحتياطي", "بيانات المحل")
     }
@@ -68,5 +70,27 @@ class ScreensSmokeTest {
         Thread.sleep(800); rule.waitForIdle()
         rule.onNodeWithText("إتمام البيع (1 صنف)").assertExists()
         rule.onNodeWithText("5.00 × 3", substring = true).assertExists()
+    }
+
+    /** Price per أوقية is 5: the customer asks for 20 worth, the app works out 4 أوقية. */
+    @Test
+    fun weightItemFromAmount() {
+        val repo = (rule.activity.application as MarketApp).container.repo
+        kotlinx.coroutines.runBlocking {
+            repo.addProduct(
+                com.tareqsoft.market.data.Product(
+                    name = "هيل", barcode = "555", unit = "أوقية", salePrice = 500, quantity = 30.0, soldByWeight = true,
+                )
+            )
+        }
+        rule.onNodeWithText("نقطة البيع").performScrollTo().performClick()
+        val field = rule.onNodeWithText("امسح الباركود أو اكتب اسم الصنف")
+        field.performTextInput("555"); field.performImeAction()
+        Thread.sleep(500); rule.waitForIdle()
+        rule.onNodeWithText("المبلغ المطلوب").performTextInput("20")
+        rule.waitForIdle()
+        rule.onNodeWithText("إضافة للسلة").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("5.00 × 4", substring = true).assertExists()
     }
 }

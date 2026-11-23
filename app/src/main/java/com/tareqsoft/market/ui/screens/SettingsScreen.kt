@@ -34,6 +34,7 @@ import com.tareqsoft.market.ui.BottomSpacer
 import com.tareqsoft.market.ui.PrimaryActionButton
 import com.tareqsoft.market.ui.ScreenScaffold
 import com.tareqsoft.market.util.Dates
+import com.tareqsoft.market.util.Sms
 import android.net.Uri
 import kotlinx.coroutines.launch
 
@@ -46,6 +47,7 @@ fun SettingsScreen(onBack: () -> Unit) {
 
     var storeName by remember { mutableStateOf(current.storeName) }
     var currency by remember { mutableStateOf(current.currency) }
+    var smsTemplate by remember { mutableStateOf(current.smsTemplate) }
     var restoreUri by remember { mutableStateOf<Uri?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -76,6 +78,24 @@ fun SettingsScreen(onBack: () -> Unit) {
                 c.settings.save(storeName, currency)
                 scope.launch { snackbar.showSnackbar("تم الحفظ") }
             }, modifier = Modifier.fillMaxWidth()) { Text("حفظ") }
+
+            Text("رسالة التذكير بالدفع", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                smsTemplate, { smsTemplate = it },
+                label = { Text("نص الرسالة") },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "تُستبدل تلقائياً: {الاسم} اسم العميل، {المبلغ} المبلغ المستحق، {المحل} اسم المحل.\n" +
+                    "مثال: " + Sms.build(smsTemplate, "أحمد", "1,500.00 ${currency.trim()}".trim(), storeName),
+                style = MaterialTheme.typography.bodySmall, color = Color.Gray,
+            )
+            OutlinedButton(onClick = {
+                c.settings.saveSmsTemplate(smsTemplate)
+                smsTemplate = c.settings.state.value.smsTemplate
+                scope.launch { snackbar.showSnackbar("تم حفظ نص الرسالة") }
+            }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("حفظ نص الرسالة") }
 
             Text("التحديثات", style = MaterialTheme.typography.titleMedium)
             Card(Modifier.fillMaxWidth()) {
