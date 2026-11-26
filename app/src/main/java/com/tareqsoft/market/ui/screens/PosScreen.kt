@@ -1,5 +1,19 @@
 package com.tareqsoft.market.ui.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.style.TextAlign
+import com.tareqsoft.market.ui.AppIcons
+import com.tareqsoft.market.ui.IndigoDeep
+import com.tareqsoft.market.ui.Saffron
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -141,10 +155,11 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
     var editLine by remember { mutableStateOf<CartLine?>(null) }
     var done by remember { mutableStateOf<Pair<Sale, Long>?>(null) } // sale + change due
 
-    val results by remember(vm.query) {
-        val q = vm.query.trim()
-        if (q.isEmpty()) flowOf(emptyList<Product>()) else repo.products.observeSearch(q)
-    }.collectAsStateWithLifecycle(emptyList())
+    var dept by rememberSaveable { mutableStateOf("") }
+    val categories by remember { repo.categories.observeAll() }.collectAsStateWithLifecycle(emptyList())
+    val results by remember(vm.query, dept) { repo.products.observeSearch(vm.query.trim(), dept) }
+        .collectAsStateWithLifecycle(emptyList())
+    val inCart = vm.cart.associate { it.product.id to it.quantity }
 
     fun onEnter() {
         val q = vm.query.trim()
@@ -174,88 +189,138 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
         title = "نقطة البيع",
         onBack = onBack,
         snackbar = snackbar,
-        actions = {
-            if (vm.cart.isNotEmpty()) {
-                IconButton(onClick = { vm.clear() }) { Icon(Icons.Filled.Delete, "تفريغ السلة") }
-            }
-        },
         bottomBar = {
             ReceiptPanel {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("المجموع  ${money(vm.subtotal)}", color = ReceiptInk.copy(alpha = 0.6f), style = MaterialTheme.typography.bodyMedium)
+                        Text("الإجمالي", color = ReceiptInk.copy(alpha = 0.65f), style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            money(vm.total),
+                            style = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum"),
+                            fontWeight = FontWeight.Bold,
+                            color = ReceiptInk,
+                        )
                         if (vm.discount > 0) {
-                            Text("الخصم  ${money(vm.discount)}", color = Danger, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "بعد خصم ${money(vm.discount)} من ${money(vm.subtotal)}",
+                                color = Danger, style = MaterialTheme.typography.labelMedium,
+                            )
                         }
                     }
-                    NumberField(vm.discountText, { vm.discountText = it }, "خصم", Modifier.width(112.dp))
-                }
-                ReceiptRule(Modifier.padding(vertical = 10.dp))
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("الإجمالي", color = ReceiptInk, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                    Text(
-                        money(vm.total),
-                        style = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum"),
-                        fontWeight = FontWeight.Bold,
-                        color = ReceiptInk,
-                    )
+                    NumberField(vm.discountText, { vm.discountText = it }, "خصم", Modifier.width(104.dp))
                 }
                 PrimaryActionButton(
                     text = if (vm.cart.isEmpty()) "إتمام البيع" else "إتمام البيع (${vm.cart.size} صنف)",
                     onClick = { checkout = true },
                     enabled = vm.cart.isNotEmpty(),
-                    modifier = Modifier.padding(top = 12.dp),
+                    modifier = Modifier.padding(top = 10.dp),
                 )
             }
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            OutlinedTextField(
-                value = vm.query,
-                onValueChange = { vm.query = it },
-                label = { Text("امسح الباركود أو اكتب اسم الصنف") },
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Filled.Search, null) },
-                trailingIcon = {
-                    Row {
+            // ---- Search / scan
+            Row(
+                Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = vm.query,
+                    onValueChange = { vm.query = it },
+                    label = { Text("الباركود أو اسم الصنف") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    leadingIcon = { Icon(Icons.Filled.Search, null) },
+                    trailingIcon = {
                         if (vm.query.isNotEmpty()) IconButton(onClick = { vm.query = "" }) { Icon(Icons.Filled.Clear, "مسح") }
-                        IconButton(onClick = scan) { Text("📷") }
-                    }
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { onEnter() }),
-                modifier = Modifier.fillMaxWidth().padding(12.dp),
-            )
-
-            if (vm.query.isNotBlank()) {
-                LazyColumn(Modifier.heightIn(max = 260.dp).padding(horizontal = 12.dp)) {
-                    items(results, key = { it.id }) { p ->
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(p.name, fontWeight = FontWeight.Bold)
-                                Text("المتوفر: ${Qty.format(p.quantity)} ${p.unit}", style = MaterialTheme.typography.bodySmall, color = if (p.quantity <= 0) Danger else Color.Gray)
-                            }
-                            Text(money(p.salePrice))
-                            IconButton(onClick = { vm.addOrWeigh(p); vm.query = "" }) { Icon(Icons.Filled.Add, "إضافة") }
-                        }
-                        HorizontalDivider()
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onEnter() }),
+                    modifier = Modifier.weight(1f),
+                )
+                Surface(
+                    onClick = scan,
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp).size(56.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(AppIcons.Scan, "مسح بالكاميرا", tint = Color.White, modifier = Modifier.size(28.dp))
                     }
                 }
             }
 
+            // ---- Departments
+            ChipSelector(
+                options = listOf("") + categories.map { it.name },
+                selected = dept,
+                label = { it.ifEmpty { "كل الأصناف" } },
+                onSelect = { dept = it },
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp),
+            )
+
+            // ---- Quick picks: tap a card to add it
+            if (results.isEmpty()) {
+                Text(
+                    if (vm.query.isBlank()) "لا توجد أصناف في هذا القسم" else "لا يوجد صنف بهذا الاسم أو الباركود",
+                    color = Color.Gray, style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+            } else {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(results, key = { it.id }) { p ->
+                        ProductTile(p, inCart[p.id]) { vm.addOrWeigh(p); if (vm.query.isNotBlank()) vm.query = "" }
+                    }
+                }
+            }
+
+            // ---- Cart
+            Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("السلة", style = MaterialTheme.typography.titleMedium)
+                if (vm.cart.isNotEmpty()) {
+                    Text(
+                        "  ${vm.cart.size} صنف",
+                        style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { vm.clear() }) {
+                        Icon(Icons.Filled.Delete, null, Modifier.size(18.dp), tint = Danger)
+                        Text(" تفريغ", color = Danger)
+                    }
+                }
+            }
             if (vm.cart.isEmpty()) {
-                EmptyState("السلة فارغة\nامسح باركود صنف أو ابحث بالاسم")
+                Column(
+                    Modifier.fillMaxSize().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Box(
+                        Modifier.size(72.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(AppIcons.Scan, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp)) }
+                    Text("السلة فارغة", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
+                    Text(
+                        "امسح الباركود، أو اضغط على صنف من القائمة بالأعلى",
+                        style = MaterialTheme.typography.bodySmall, color = Color.Gray,
+                    )
+                }
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(12.dp),
+                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    items(vm.cart, key = { it.product.id }) { line ->
+                    itemsIndexed(vm.cart, key = { _, l -> l.product.id }) { i, line ->
                         CartRow(
-                            line,
+                            index = i + 1,
+                            line = line,
                             onMinus = { vm.setQty(line, line.quantity - 1) },
                             onPlus = { vm.setQty(line, line.quantity + 1) },
                             onEdit = { editLine = line },
@@ -337,20 +402,114 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
     }
 }
 
+/** One line of the bill, like a line in the shop's ledger. */
 @Composable
-private fun CartRow(line: CartLine, onMinus: () -> Unit, onPlus: () -> Unit, onEdit: () -> Unit) {
+private fun CartRow(index: Int, line: CartLine, onMinus: () -> Unit, onPlus: () -> Unit, onEdit: () -> Unit) {
     val short = line.quantity > line.product.quantity
-    Card(onClick = onEdit, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(line.product.name, fontWeight = FontWeight.Bold)
-                Text("${money(line.unitPrice)} × ${Qty.format(line.quantity)}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                if (short) Text("تنبيه: الكمية في المخزن ${Qty.format(line.product.quantity)} فقط", style = MaterialTheme.typography.bodySmall, color = Warning)
+    val weighed = line.product.soldByWeight
+    Surface(
+        onClick = onEdit,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 1.dp,
+    ) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(26.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { Text("$index", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
+            Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                Text(line.product.name, fontWeight = FontWeight.SemiBold, maxLines = 2)
+                Text(
+                    "${money(line.unitPrice)} × ${Qty.format(line.quantity)}" + if (weighed) " ${line.product.unit}" else "",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (short) Text("المتوفر ${Qty.format(line.product.quantity)} فقط", style = MaterialTheme.typography.labelSmall, color = Warning)
             }
-            OutlinedButton(onClick = onMinus, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(48.dp)) { Text("−", style = MaterialTheme.typography.titleLarge) }
-            Text(Qty.format(line.quantity), Modifier.padding(horizontal = 8.dp), fontWeight = FontWeight.Bold)
-            OutlinedButton(onClick = onPlus, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(48.dp)) { Text("+", style = MaterialTheme.typography.titleLarge) }
-            Text(money(line.total), Modifier.width(90.dp).padding(start = 8.dp), fontWeight = FontWeight.Bold)
+            if (weighed) {
+                Surface(
+                    onClick = onEdit,
+                    shape = RoundedCornerShape(50),
+                    color = Saffron.copy(alpha = 0.16f),
+                ) {
+                    Text(
+                        "${Qty.format(line.quantity)} ${line.product.unit}",
+                        Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelLarge, color = Warning,
+                    )
+                }
+            } else {
+                // − qty + grouped in one capsule
+                Row(
+                    Modifier
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
+                        .height(44.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onMinus, modifier = Modifier.size(44.dp)) {
+                        Text("−", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                    Text(
+                        Qty.format(line.quantity),
+                        style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+                        modifier = Modifier.widthIn(min = 22.dp),
+                        textAlign = TextAlign.Center,
+                    )
+                    IconButton(onClick = onPlus, modifier = Modifier.size(44.dp)) {
+                        Text("+", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+            Text(
+                money(line.total),
+                Modifier.widthIn(min = 84.dp).padding(start = 10.dp),
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
+                textAlign = TextAlign.End,
+            )
+        }
+    }
+}
+
+/** Quick-pick card: tap to add. Shows how many are already in the cart. */
+@Composable
+private fun ProductTile(p: Product, inCart: Double?, onClick: () -> Unit) {
+    val out = p.quantity <= 0
+    Box {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(
+                if (inCart != null) 2.dp else 1.dp,
+                if (inCart != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+            ),
+            modifier = Modifier.width(128.dp).height(96.dp),
+        ) {
+            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                Text(p.name, style = MaterialTheme.typography.labelLarge, maxLines = 2, minLines = 2)
+                Column {
+                    Text(
+                        money(p.salePrice) + if (p.soldByWeight) " / ${p.unit}" else "",
+                        style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary, maxLines = 1,
+                    )
+                    Text(
+                        if (out) "نفد من المخزن" else "متوفر ${Qty.format(p.quantity)} ${p.unit}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (out) Danger else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                    )
+                }
+            }
+        }
+        if (inCart != null) {
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(4.dp).size(24.dp).background(Saffron, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(Qty.format(inCart).take(4), style = MaterialTheme.typography.labelSmall, color = IndigoDeep, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }

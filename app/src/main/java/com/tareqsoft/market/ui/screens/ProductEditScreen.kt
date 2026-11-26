@@ -175,7 +175,7 @@ fun ProductEditScreen(productId: String, onBack: () -> Unit) {
                             Text("الكمية الحالية: ", style = MaterialTheme.typography.titleMedium)
                             Text(
                                 "${Qty.format(p.quantity)} ${p.unit}",
-                                style = MaterialTheme.typography.titleLarge,
+                                style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = if (p.quantity <= p.minQuantity) Danger else MaterialTheme.colorScheme.primary,
                             )

@@ -21,25 +21,49 @@ import com.tareqsoft.market.AppContainer
 
 val LocalContainer = staticCompositionLocalOf<AppContainer> { error("No AppContainer") }
 
-val Green = Color(0xFF2E7D32)
-val DarkGreen = Color(0xFF1B5E20)
-val Danger = Color(0xFFC62828)
-val Warning = Color(0xFFEF6C00)
-val Info = Color(0xFF1565C0)
+/*
+ * Palette taken from the qamariya (القمرية), the stained-glass arch windows of
+ * Sana'a houses: deep indigo glass, emerald, ruby and saffron, set in white
+ * gypsum on stone. Each colour has one job:
+ *   Indigo  - the app itself (bars, main actions)
+ *   Emerald - money received, collected, in stock
+ *   Ruby    - debts, returns, deleting
+ *   Saffron - things that need attention (pending, low stock)
+ */
+val Indigo = Color(0xFF24305E)
+val IndigoDeep = Color(0xFF18203F)
+val Emerald = Color(0xFF1F7A5A)
+val Ruby = Color(0xFFB4374A)
+val Saffron = Color(0xFFE3A13A)
+val Stone = Color(0xFFF2F1EE)
+val Gypsum = Color(0xFFFFFFFF)
+
+// Names used across the screens.
+val Green = Emerald
+val DarkGreen = Color(0xFF145440)
+val Danger = Ruby
+val Warning = Color(0xFFB26A12)   // saffron darkened so text stays readable on white
+val Info = Color(0xFF2F5C9E)
 
 private val colors = lightColorScheme(
-    primary = Green,
+    primary = Indigo,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFC8E6C9),
-    onPrimaryContainer = DarkGreen,
-    secondary = Color(0xFF00695C),
+    primaryContainer = Color(0xFFDDE2F3),
+    onPrimaryContainer = IndigoDeep,
+    secondary = Emerald,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFB2DFDB),
-    tertiary = Info,
-    error = Danger,
-    background = Color(0xFFF7F9F7),
-    surface = Color.White,
-    surfaceVariant = Color(0xFFEEF2EE),
+    secondaryContainer = Color(0xFFD5EDE3),
+    onSecondaryContainer = DarkGreen,
+    tertiary = Saffron,
+    onTertiary = IndigoDeep,
+    tertiaryContainer = Color(0xFFFBEBCF),
+    error = Ruby,
+    background = Stone,
+    surface = Gypsum,
+    surfaceVariant = Color(0xFFE9E8F0),
+    onSurfaceVariant = Color(0xFF4A4E63),
+    outline = Color(0xFFB9BBC8),
+    outlineVariant = Color(0xFFDCDCE4),
 )
 
 /** IBM Plex Sans Arabic: designed for screens, clear Arabic and Latin digits side by side. */
@@ -51,8 +75,8 @@ val PlexArabic = FontFamily(
 )
 
 /** Receipt paper and ink, used by the checkout panel. */
-val ReceiptPaper = Color(0xFFFFFCF3)
-val ReceiptInk = Color(0xFF14361F)
+val ReceiptPaper = Color(0xFFFFFDF8)
+val ReceiptInk = IndigoDeep
 
 /** Same type scale as Material, with the Plex face on every style. */
 private val typography = Typography().run {
@@ -60,7 +84,7 @@ private val typography = Typography().run {
     Typography(
         displayLarge = displayLarge.plex(), displayMedium = displayMedium.plex(), displaySmall = displaySmall.plex(),
         headlineLarge = headlineLarge.plex(), headlineMedium = headlineMedium.plex(), headlineSmall = headlineSmall.plex(),
-        titleLarge = titleLarge.plex().copy(fontWeight = FontWeight.SemiBold),
+        titleLarge = titleLarge.plex().copy(fontWeight = FontWeight.Bold),
         titleMedium = titleMedium.plex().copy(fontWeight = FontWeight.SemiBold),
         titleSmall = titleSmall.plex(),
         bodyLarge = bodyLarge.plex(), bodyMedium = bodyMedium.plex(), bodySmall = bodySmall.plex(),

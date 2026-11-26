@@ -157,7 +157,7 @@ private fun ProductRow(p: Product, onClick: () -> Unit) {
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     Qty.format(p.quantity),
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.headlineSmall,
                     color = if (low || p.quantity < 0) Danger else Color.Unspecified,
                     fontWeight = FontWeight.Bold,
                 )

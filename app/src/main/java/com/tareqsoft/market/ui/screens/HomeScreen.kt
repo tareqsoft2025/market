@@ -1,5 +1,29 @@
 package com.tareqsoft.market.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import com.tareqsoft.market.ui.Emerald
+import com.tareqsoft.market.ui.Indigo
+import com.tareqsoft.market.ui.IndigoDeep
+import com.tareqsoft.market.ui.QamariyaWindow
+import com.tareqsoft.market.ui.Ruby
+import com.tareqsoft.market.ui.Saffron
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -67,48 +91,107 @@ fun HomeScreen(navigate: (String) -> Unit) {
     val pendingBank by remember { repo.payments.observePendingBankCount() }.collectAsStateWithLifecycle(0)
     val lowStock by remember { repo.products.observeLowStockCount() }.collectAsStateWithLifecycle(0)
 
-    ScreenScaffold(title = settings.storeName) { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState())
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)),
+    ) {
+        // ---- Header: the qamariya over the store's name
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
+                .background(Brush.verticalGradient(listOf(IndigoDeep, Indigo)))
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(top = 20.dp, bottom = 52.dp),
+            contentAlignment = Alignment.TopCenter,
         ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                QamariyaWindow(Modifier.width(200.dp).height(100.dp))
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    settings.storeName,
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                )
+                Text(
+                    "ملخص اليوم  •  ${Dates.date(from)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.72f),
+                )
+            }
+        }
+
+        Column(
+            Modifier.padding(horizontal = 16.dp).offset(y = (-36).dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            // ---- Today, as one ledger line
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(6.dp),
+                shape = RoundedCornerShape(20.dp),
+            ) {
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 14.dp)) {
+                    LedgerFigure("المبيعات", money(salesTotal), "$salesCount فاتورة", Indigo, Modifier.weight(1f))
+                    VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    LedgerFigure("المردودات", money(returnsTotal), null, Ruby, Modifier.weight(1f))
+                    VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    LedgerFigure("الصافي", money(salesTotal - returnsTotal), null, Emerald, Modifier.weight(1f))
+                }
+            }
+
             UpdateBanner()
 
-            Text("ملخص اليوم  ${Dates.date(from)}", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard("المبيعات", money(salesTotal), Modifier.weight(1f), subtitle = "$salesCount فاتورة")
-                StatCard("المردودات", money(returnsTotal), Modifier.weight(1f), color = Danger)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard("صافي المبيعات", money(salesTotal - returnsTotal), Modifier.weight(1f), color = Info)
-                StatCard(
-                    "تحويلات بانتظار المراجعة", "$pendingBank", Modifier.weight(1f),
-                    color = if (pendingBank > 0) Warning else Color.Gray,
-                    onClick = { navigate(Routes.COLLECTIONS) },
-                )
-            }
-            if (lowStock > 0) {
-                StatCard(
-                    "أصناف وصلت لحد الطلب", "$lowStock صنف", Modifier.fillMaxWidth(),
-                    color = Danger, subtitle = "اضغط لعرض المخزن",
-                    onClick = { navigate(Routes.PRODUCTS) },
-                )
+            // ---- Things waiting for the owner
+            if (pendingBank > 0 || lowStock > 0) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
+                    if (pendingBank > 0) {
+                        AlertPill("تحويلات للمراجعة: $pendingBank", Saffron, Modifier.weight(1f).fillMaxHeight()) {
+                            navigate(Routes.COLLECTIONS)
+                        }
+                    }
+                    if (lowStock > 0) {
+                        AlertPill("نواقص المخزن: $lowStock", Ruby, Modifier.weight(1f).fillMaxHeight()) { navigate(Routes.PRODUCTS) }
+                    }
+                }
             }
 
-            Spacer(Modifier.height(4.dp))
+            // ---- The main job of the shop: selling
+            Card(
+                onClick = { navigate(Routes.POS) },
+                colors = CardDefaults.cardColors(containerColor = Indigo),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(4.dp),
+            ) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(52.dp).background(Saffron, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Filled.ShoppingCart, null, tint = IndigoDeep, modifier = Modifier.size(28.dp)) }
+                    Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                        Text("نقطة البيع", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                        Text("ابدأ فاتورة جديدة", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = Color.White.copy(alpha = 0.8f))
+                }
+            }
+
+            // ---- Everything else
             val tiles = listOf(
-                Tile("نقطة البيع", Icons.Filled.ShoppingCart, Routes.POS, MaterialTheme.colorScheme.primary),
-                Tile("المخزن والأصناف", Icons.AutoMirrored.Filled.List, Routes.PRODUCTS, Color(0xFF6D4C41)),
-                Tile("الفواتير والمردودات", Icons.Filled.DateRange, Routes.SALES, Color(0xFF00695C)),
-                Tile("التحصيلات والتحويلات", Icons.Filled.CheckCircle, Routes.COLLECTIONS, Info),
-                Tile("العملاء والديون", Icons.Filled.Person, Routes.CUSTOMERS, Color(0xFF6A1B9A)),
-                Tile("التقارير", Icons.Filled.Star, Routes.REPORTS, Warning),
-                Tile("أقسام المحل", AppIcons.Departments, Routes.CATEGORIES, Color(0xFF455A64)),
-                Tile("الإعدادات والنسخ الاحتياطي", Icons.Filled.Settings, Routes.SETTINGS, Color.DarkGray),
+                Tile("المخزن والأصناف", "الكميات والتوريد والجرد", Icons.AutoMirrored.Filled.List, Routes.PRODUCTS, Emerald),
+                Tile("الفواتير والمردودات", "كل فاتورة ومردودها", Icons.Filled.DateRange, Routes.SALES, Indigo),
+                Tile("التحصيلات والتحويلات", "الصندوق والبنك والمحافظ", AppIcons.Wallet, Routes.COLLECTIONS, Info),
+                Tile("العملاء والديون", "الآجل ونسبة التحصيل", Icons.Filled.Person, Routes.CUSTOMERS, Ruby),
+                Tile("التقارير", "المبيعات والأرباح", Icons.Filled.Star, Routes.REPORTS, Warning),
+                Tile("أقسام المحل", "مواد غذائية، ألبان...", AppIcons.Departments, Routes.CATEGORIES, Color(0xFF6B4E8A)),
+                Tile("الإعدادات والنسخ الاحتياطي", "المحل والرسائل والتحديث", Icons.Filled.Settings, Routes.SETTINGS, Color(0xFF5A5F73)),
             )
             tiles.chunked(2).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    row.forEach { t -> TileCard(t, Modifier.weight(1f)) { navigate(t.route) } }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
+                    row.forEach { t -> TileCard(t, Modifier.weight(1f).fillMaxHeight()) { navigate(t.route) } }
                     if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
@@ -117,24 +200,57 @@ fun HomeScreen(navigate: (String) -> Unit) {
     }
 }
 
-private data class Tile(val title: String, val icon: ImageVector, val route: String, val color: Color)
+@Composable
+private fun LedgerFigure(label: String, value: String, sub: String?, color: Color, modifier: Modifier) {
+    Column(modifier.padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value,
+            style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+            fontWeight = FontWeight.Bold, color = color, maxLines = 1,
+        )
+        if (sub != null) Text(sub, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun AlertPill(text: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.13f)),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).background(color, CircleShape))
+            Text(
+                text, Modifier.padding(start = 8.dp),
+                style = MaterialTheme.typography.labelLarge, color = if (color == Saffron) Warning else color,
+            )
+        }
+    }
+}
+
+private data class Tile(val title: String, val hint: String, val icon: ImageVector, val route: String, val color: Color)
 
 @Composable
 private fun TileCard(t: Tile, modifier: Modifier, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        modifier = modifier.height(110.dp),
-        colors = CardDefaults.cardColors(containerColor = t.color),
-        elevation = CardDefaults.cardElevation(3.dp),
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(18.dp),
+        elevation = CardDefaults.cardElevation(1.dp),
     ) {
-        Column(
-            Modifier.fillMaxSize().padding(12.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Icon(t.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(36.dp))
-            Spacer(Modifier.height(8.dp))
-            Text(t.title, color = Color.White, fontWeight = FontWeight.Bold)
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(
+                Modifier.size(44.dp).background(t.color.copy(alpha = 0.12f), RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center,
+            ) { Icon(t.icon, contentDescription = null, tint = t.color, modifier = Modifier.size(24.dp)) }
+            Column {
+                Text(t.title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                Text(t.hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
         }
     }
 }
