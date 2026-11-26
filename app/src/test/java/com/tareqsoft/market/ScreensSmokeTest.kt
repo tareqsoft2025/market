@@ -65,7 +65,7 @@ class ScreensSmokeTest {
             repo.addProduct(com.tareqsoft.market.data.Product(name = "حليب", barcode = "111", salePrice = 500, quantity = 9.0))
         }
         rule.onNodeWithText("نقطة البيع").performScrollTo().performClick()
-        val field = rule.onNodeWithText("امسح الباركود أو اكتب اسم الصنف")
+        val field = rule.onNodeWithText("الباركود أو اسم الصنف")
         repeat(3) { field.performTextInput("111"); field.performImeAction() }
         Thread.sleep(800); rule.waitForIdle()
         rule.onNodeWithText("إتمام البيع (1 صنف)").assertExists()
@@ -84,7 +84,7 @@ class ScreensSmokeTest {
             )
         }
         rule.onNodeWithText("نقطة البيع").performScrollTo().performClick()
-        val field = rule.onNodeWithText("امسح الباركود أو اكتب اسم الصنف")
+        val field = rule.onNodeWithText("الباركود أو اسم الصنف")
         field.performTextInput("555"); field.performImeAction()
         Thread.sleep(500); rule.waitForIdle()
         rule.onNodeWithText("المبلغ المطلوب").performTextInput("20")

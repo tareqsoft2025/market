@@ -66,12 +66,6 @@ private val colors = lightColorScheme(
     outlineVariant = Color(0xFFDCDCE4),
 )
 
-/** Reem Kufi: geometric Kufic, like the inscriptions on Yemeni buildings. Headings only. */
-val Kufi = FontFamily(
-    Font(R.font.reem_kufi_medium, FontWeight.Medium),
-    Font(R.font.reem_kufi_bold, FontWeight.Bold),
-)
-
 /** IBM Plex Sans Arabic: designed for screens, clear Arabic and Latin digits side by side. */
 val PlexArabic = FontFamily(
     Font(R.font.plex_arabic_regular, FontWeight.Normal),
@@ -90,8 +84,7 @@ private val typography = Typography().run {
     Typography(
         displayLarge = displayLarge.plex(), displayMedium = displayMedium.plex(), displaySmall = displaySmall.plex(),
         headlineLarge = headlineLarge.plex(), headlineMedium = headlineMedium.plex(), headlineSmall = headlineSmall.plex(),
-        // Screen titles in Kufi; everything with numbers stays in Plex.
-        titleLarge = titleLarge.copy(fontFamily = Kufi, fontWeight = FontWeight.Bold),
+        titleLarge = titleLarge.plex().copy(fontWeight = FontWeight.Bold),
         titleMedium = titleMedium.plex().copy(fontWeight = FontWeight.SemiBold),
         titleSmall = titleSmall.plex(),
         bodyLarge = bodyLarge.plex(), bodyMedium = bodyMedium.plex(), bodySmall = bodySmall.plex(),

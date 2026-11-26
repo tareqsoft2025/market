@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.Brush
 import com.tareqsoft.market.ui.Emerald
 import com.tareqsoft.market.ui.Indigo
 import com.tareqsoft.market.ui.IndigoDeep
-import com.tareqsoft.market.ui.Kufi
 import com.tareqsoft.market.ui.QamariyaWindow
 import com.tareqsoft.market.ui.Ruby
 import com.tareqsoft.market.ui.Saffron
@@ -114,7 +113,7 @@ fun HomeScreen(navigate: (String) -> Unit) {
                 Spacer(Modifier.height(14.dp))
                 Text(
                     settings.storeName,
-                    style = MaterialTheme.typography.headlineMedium.copy(fontFamily = Kufi, fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                     color = Color.White,
                 )
                 Text(
