@@ -347,9 +347,9 @@ private fun CartRow(line: CartLine, onMinus: () -> Unit, onPlus: () -> Unit, onE
                 Text("${money(line.unitPrice)} × ${Qty.format(line.quantity)}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 if (short) Text("تنبيه: الكمية في المخزن ${Qty.format(line.product.quantity)} فقط", style = MaterialTheme.typography.bodySmall, color = Warning)
             }
-            OutlinedButton(onClick = onMinus, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(48.dp)) { Text("−", style = MaterialTheme.typography.titleLarge) }
+            OutlinedButton(onClick = onMinus, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(48.dp)) { Text("−", style = MaterialTheme.typography.headlineSmall) }
             Text(Qty.format(line.quantity), Modifier.padding(horizontal = 8.dp), fontWeight = FontWeight.Bold)
-            OutlinedButton(onClick = onPlus, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(48.dp)) { Text("+", style = MaterialTheme.typography.titleLarge) }
+            OutlinedButton(onClick = onPlus, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(48.dp)) { Text("+", style = MaterialTheme.typography.headlineSmall) }
             Text(money(line.total), Modifier.width(90.dp).padding(start = 8.dp), fontWeight = FontWeight.Bold)
         }
     }

@@ -80,6 +80,7 @@ fun ScreenScaffold(
 ) {
     Scaffold(
         topBar = {
+          Column {
             TopAppBar(
                 title = { Text(title, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
@@ -97,6 +98,8 @@ fun ScreenScaffold(
                     actionIconContentColor = Color.White,
                 ),
             )
+            QamariyaBand()
+          }
         },
         snackbarHost = { if (snackbar != null) SnackbarHost(snackbar) },
         // Lift floating buttons clear of the phone's own navigation buttons / gesture bar.
