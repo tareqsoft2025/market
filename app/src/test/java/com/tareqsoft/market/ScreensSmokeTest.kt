@@ -93,4 +93,18 @@ class ScreensSmokeTest {
         rule.waitForIdle()
         rule.onNodeWithText("5.00 × 4", substring = true).assertExists()
     }
+
+    /** The payment QR can be enlarged to full screen and closed again. */
+    @Test
+    fun walletQrEnlarges() {
+        val c = (rule.activity.application as MarketApp).container
+        c.settings.saveWallet("0598815128", com.tareqsoft.market.util.WalletPay.DEFAULT_PREFIX)
+        rule.onNodeWithText("الإعدادات والنسخ الاحتياطي").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("تكبير الرمز", substring = true).performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("إغلاق").assertExists().performClick()
+        // The full-screen window is removed a moment after closing.
+        rule.waitUntil(3_000) { rule.onAllNodesWithText("إغلاق").fetchSemanticsNodes().isEmpty() }
+    }
 }

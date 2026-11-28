@@ -1,8 +1,8 @@
 {
-  "version": "1.1.2",
-  "versionCode": 10102,
+  "version": "1.1.3",
+  "versionCode": 10103,
   "mandatory": false,
   "apkUrl": "https://raw.githubusercontent.com/tareqsoft2025/market/main/dist/market.apk",
   "size": 7906065,
-  "notes": "الدفع بالمسح عبر محفظتي: يظهر رمز QR فيه كود التحويل ومبلغ الفاتورة، يمسحه الزبون بجواله ويضغط اتصال"
+  "notes": "زر تكبير رمز الدفع: يعرض الرمز بملء الشاشة بإضاءة كاملة ليسهل مسحه"
 }
