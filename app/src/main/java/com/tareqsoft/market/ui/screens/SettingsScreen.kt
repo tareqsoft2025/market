@@ -30,11 +30,15 @@ import androidx.compose.ui.unit.dp
 import com.tareqsoft.market.ui.ConfirmDialog
 import com.tareqsoft.market.ui.LabelValue
 import com.tareqsoft.market.ui.LocalContainer
+import com.tareqsoft.market.ui.NumberField
+import com.tareqsoft.market.ui.WalletPayCard
+import com.tareqsoft.market.ui.LtrCode
 import com.tareqsoft.market.ui.BottomSpacer
 import com.tareqsoft.market.ui.PrimaryActionButton
 import com.tareqsoft.market.ui.ScreenScaffold
 import com.tareqsoft.market.util.Dates
 import com.tareqsoft.market.util.Sms
+import com.tareqsoft.market.util.WalletPay
 import android.net.Uri
 import kotlinx.coroutines.launch
 
@@ -48,6 +52,8 @@ fun SettingsScreen(onBack: () -> Unit) {
     var storeName by remember { mutableStateOf(current.storeName) }
     var currency by remember { mutableStateOf(current.currency) }
     var smsTemplate by remember { mutableStateOf(current.smsTemplate) }
+    var walletNumber by remember { mutableStateOf(current.walletNumber) }
+    var walletPrefix by remember { mutableStateOf(current.walletPrefix) }
     var restoreUri by remember { mutableStateOf<Uri?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -78,6 +84,46 @@ fun SettingsScreen(onBack: () -> Unit) {
                 c.settings.save(storeName, currency)
                 scope.launch { snackbar.showSnackbar("تم الحفظ") }
             }, modifier = Modifier.fillMaxWidth()) { Text("حفظ") }
+
+            Text("الدفع بالمسح عبر محفظتي", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "عند اختيار \"محفظتي\" في الدفع يظهر رمز QR فيه كود التحويل ومبلغ الفاتورة. " +
+                    "يمسحه الزبون بكاميرا جواله فيُفتح الاتصال والكود مكتوب، ويضغط اتصال.",
+                style = MaterialTheme.typography.bodySmall, color = Color.Gray,
+            )
+            NumberField(walletNumber, { walletNumber = it }, "رقم محفظتي لاستلام المبالغ", Modifier.fillMaxWidth(), decimal = false)
+            OutlinedTextField(
+                walletPrefix, { walletPrefix = it },
+                label = { Text("بداية كود التحويل") },
+                singleLine = true, modifier = Modifier.fillMaxWidth(),
+                textStyle = androidx.compose.material3.LocalTextStyle.current.copy(
+                    textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                ),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone,
+                ),
+            )
+            Text(
+                "يُضاف بعدها تلقائياً: رقم المحفظة * المبلغ #",
+                style = MaterialTheme.typography.bodySmall, color = Color.Gray,
+            )
+            if (WalletPay.isValidWallet(walletNumber)) {
+                LtrCode(
+                    WalletPay.ussd(walletPrefix, walletNumber, 1500),
+                    MaterialTheme.typography.titleMedium, MaterialTheme.colorScheme.primary,
+                )
+                Text("مثال: الكود الكامل لفاتورة بمبلغ 15", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            }
+            OutlinedButton(onClick = {
+                c.settings.saveWallet(walletNumber, walletPrefix)
+                walletNumber = c.settings.state.value.walletNumber
+                walletPrefix = c.settings.state.value.walletPrefix
+                scope.launch { snackbar.showSnackbar("تم حفظ بيانات المحفظة") }
+            }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("حفظ بيانات المحفظة") }
+            if (current.walletNumber.isNotEmpty()) {
+                Text("معاينة (مبلغ تجريبي 1):", style = MaterialTheme.typography.labelLarge)
+                WalletPayCard(amount = 100)
+            }
 
             Text("رسالة التذكير بالدفع", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(
