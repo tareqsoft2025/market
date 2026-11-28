@@ -504,7 +504,7 @@ fun CustomerDetailScreen(customerId: String, onBack: () -> Unit, onOpenSale: (St
                     ChipSelector(listOf(PaymentMethod.CASH, PaymentMethod.BANK), method, {
                         if (it == PaymentMethod.BANK) "تحويل" else PaymentMethod.label(it)
                     }, { method = it })
-                    if (method == PaymentMethod.BANK) TransferFields(transfer)
+                    if (method == PaymentMethod.BANK) TransferFields(transfer, amount = Money.parse(amount))
                 }
             },
             confirmButton = {

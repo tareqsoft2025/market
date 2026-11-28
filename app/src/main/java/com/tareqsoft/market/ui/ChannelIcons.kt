@@ -1,6 +1,22 @@
 package com.tareqsoft.market.ui
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
+import com.tareqsoft.market.util.WalletPay
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Row
@@ -102,9 +118,12 @@ class TransferFormState {
 }
 
 @Composable
-fun TransferFields(state: TransferFormState) {
+fun TransferFields(state: TransferFormState, amount: Long? = null) {
     androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ChannelSelector(state.channel, { state.channel = it })
+        if (state.channel == TransferChannel.MAHFATHATI && amount != null && amount > 0) {
+            WalletPayCard(amount)
+        }
         androidx.compose.material3.OutlinedTextField(
             state.name, { state.name = it }, singleLine = true,
             label = { Text(if (state.channel == TransferChannel.BANK) "اسم البنك" else "اسم المحفظة (اختياري)") },
@@ -122,5 +141,64 @@ fun TransferFields(state: TransferFormState) {
             "يكفي رقم العملية أو رقم الجوال. يظهر التحويل في شاشة المراجعة حتى تأكيد وصوله.",
             style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = Color.Gray,
         )
+    }
+}
+
+/** The shop's محفظتي transfer code for this amount, as a QR the customer scans. */
+@Composable
+fun WalletPayCard(amount: Long, modifier: Modifier = Modifier) {
+    val settings by LocalContainer.current.settings.state.collectAsState()
+    val number = settings.walletNumber
+    if (!WalletPay.isValidWallet(number)) {
+        Text(
+            "لعرض رمز الدفع بالمسح: أدخل رقم محفظتك في الإعدادات.",
+            style = MaterialTheme.typography.bodySmall, color = Warning,
+        )
+        return
+    }
+    val code = WalletPay.ussd(settings.walletPrefix, number, amount)
+    val qr = remember(code) { qrImage(WalletPay.telUri(code)) }
+    androidx.compose.material3.Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        color = Color.White,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("امسح الرمز بكاميرا جوال الزبون", style = MaterialTheme.typography.labelLarge)
+            Image(
+                bitmap = qr, contentDescription = "رمز الدفع عبر محفظتي",
+                filterQuality = FilterQuality.None,
+                modifier = Modifier.padding(vertical = 8.dp).size(190.dp),
+            )
+            Text(money(amount), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            LtrCode(code, MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"), Color.DarkGray)
+            Text(
+                "يُفتح الاتصال والرمز مكتوب، يضغط الزبون اتصال لإتمام التحويل. بعد وصول الرسالة اكتب رقم العملية بالأسفل.",
+                style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+/** Black-on-white QR bitmap. */
+fun qrImage(content: String, size: Int = 512): ImageBitmap {
+    val m = WalletPay.qr(content, size)
+    val pixels = IntArray(m.width * m.height) { i ->
+        if (m.get(i % m.width, i / m.width)) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+    }
+    return android.graphics.Bitmap.createBitmap(pixels, m.width, m.height, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
+}
+
+/**
+ * Shows a USSD code (*370*1*1*...#) always left to right. Each run of digits
+ * and each symbol is its own piece in a left-to-right row, so no phone's
+ * right-to-left text handling can reorder it.
+ */
+@Composable
+fun LtrCode(code: String, style: androidx.compose.ui.text.TextStyle, color: Color = Color.Unspecified) {
+    val pieces = Regex("[0-9]+|[^0-9]").findAll(code).map { it.value }.toList()
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row { pieces.forEach { Text(it, style = style, color = color) } }
     }
 }

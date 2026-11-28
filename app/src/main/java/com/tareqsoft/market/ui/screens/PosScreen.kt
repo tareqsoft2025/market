@@ -628,7 +628,7 @@ private fun CheckoutDialog(
                             LabelValue(if (change >= 0) "الباقي" else "ناقص", money(kotlin.math.abs(change)), if (change < 0) Danger else Warning, true)
                         }
                     }
-                    PaymentMethod.BANK -> TransferFields(transfer)
+                    PaymentMethod.BANK -> TransferFields(transfer, amount = total)
                 }
                 if (method == PaymentMethod.CREDIT || customer != null) {
                     OutlinedButton(onClick = { pickCustomer = true }, modifier = Modifier.fillMaxWidth()) {

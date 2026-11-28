@@ -10,6 +10,10 @@ data class StoreSettings(
     val currency: String,
     val deviceId: String,
     val smsTemplate: String,
+    /** Shop's محفظتي number that receives transfers. Empty = pay-by-scan off. */
+    val walletNumber: String,
+    /** Start of the transfer code, e.g. *370*1*1* */
+    val walletPrefix: String,
 )
 
 /** Small key/value settings. Kept in SharedPreferences (survives app updates). */
@@ -31,6 +35,8 @@ class Settings(context: Context) {
             currency = prefs.getString(KEY_CURRENCY, "") ?: "",
             deviceId = deviceId,
             smsTemplate = prefs.getString(KEY_SMS, null) ?: Sms.DEFAULT_TEMPLATE,
+            walletNumber = prefs.getString(KEY_WALLET, "") ?: "",
+            walletPrefix = prefs.getString(KEY_WALLET_PREFIX, null) ?: WalletPay.DEFAULT_PREFIX,
         )
     }
 
@@ -47,7 +53,17 @@ class Settings(context: Context) {
         _state.value = read()
     }
 
+    fun saveWallet(number: String, prefix: String) {
+        prefs.edit()
+            .putString(KEY_WALLET, number.filter { it.isDigit() })
+            .putString(KEY_WALLET_PREFIX, normalizeDigits(prefix).filterNot { it.isWhitespace() }.ifBlank { WalletPay.DEFAULT_PREFIX })
+            .apply()
+        _state.value = read()
+    }
+
     private companion object {
+        const val KEY_WALLET = "wallet_number"
+        const val KEY_WALLET_PREFIX = "wallet_prefix"
         const val KEY_SMS = "sms_template"
         const val KEY_STORE = "store_name"
         const val KEY_CURRENCY = "currency"
