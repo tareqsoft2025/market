@@ -96,27 +96,100 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 /** Holds the cart so it survives screen rotation. */
-class PosViewModel(private val repo: MarketRepository) : ViewModel() {
-    val cart = mutableStateListOf<CartLine>()
+/** One customer's open bill. Several can be open at once. */
+class CartTab(val id: Long, val number: Int) {
+    val lines = mutableStateListOf<CartLine>()
     var discountText by mutableStateOf("")
-    var query by mutableStateOf("")
 
-    val subtotal: Long get() = cart.sumOf { it.total }
+    val subtotal: Long get() = lines.sumOf { it.total }
     val discount: Long get() = Money.parse(discountText)?.coerceIn(0, subtotal) ?: 0
     val total: Long get() = subtotal - discount
+    val label: String get() = "زبون $number"
+}
+
+/**
+ * Open bills for the point of sale. Kept for the whole time the app is open,
+ * so the cashier can leave the screen (to check stock, say) and come back to
+ * the same customers.
+ */
+class PosViewModel(private val repo: MarketRepository) : ViewModel() {
+    private var nextId = 1L
+    val tabs = mutableStateListOf(CartTab(nextId++, 1))
+    var activeId by mutableStateOf(tabs.first().id)
+        private set
+    var query by mutableStateOf("")
+
+    val active: CartTab get() = tabs.firstOrNull { it.id == activeId } ?: tabs.first()
+
+    // The screen works on the active customer's bill.
+    val cart get() = active.lines
+    var discountText: String
+        get() = active.discountText
+        set(v) { active.discountText = v }
+    val subtotal: Long get() = active.subtotal
+    val discount: Long get() = active.discount
+    val total: Long get() = active.total
+
+    /** Bills that have something in them (shown on the home screen). */
+    val openBills: Int get() = tabs.count { it.lines.isNotEmpty() }
+
+    /** Starts a bill for another customer and switches to it. */
+    fun newTab() {
+        // Reuse an empty bill instead of piling up empty tabs.
+        tabs.firstOrNull { it.lines.isEmpty() && it.id != activeId }?.let { activeId = it.id; return }
+        val number = (tabs.maxOfOrNull { it.number } ?: 0) + 1
+        val tab = CartTab(nextId++, number)
+        tabs.add(tab)
+        activeId = tab.id
+        query = ""
+    }
+
+    fun select(id: Long) {
+        activeId = id
+        query = ""
+    }
+
+    /** Closes a bill. The last one is emptied instead, and numbering starts again at 1. */
+    fun closeTab(id: Long) {
+        val i = tabs.indexOfFirst { it.id == id }
+        if (i < 0) return
+        if (tabs.size == 1) {
+            tabs[0] = CartTab(nextId++, 1)
+            activeId = tabs[0].id
+        } else {
+            tabs.removeAt(i)
+            if (activeId == id) activeId = tabs[(i - 1).coerceAtLeast(0)].id
+        }
+        query = ""
+    }
 
     /** Item sold by weight waiting for the cashier to enter a weight or an amount. */
     var weighing by mutableStateOf<Product?>(null)
+    private var weighingTab: CartTab? = null
 
-    fun add(p: Product, qty: Double = 1.0, price: Long = p.salePrice) {
-        val i = cart.indexOfFirst { it.product.id == p.id }
-        if (i >= 0) cart[i] = cart[i].copy(quantity = cart[i].quantity + qty)
-        else cart.add(CartLine(p, qty, price))
+    fun add(p: Product, qty: Double = 1.0, price: Long = p.salePrice, tab: CartTab = active) {
+        val lines = tab.lines
+        val i = lines.indexOfFirst { it.product.id == p.id }
+        if (i >= 0) lines[i] = lines[i].copy(quantity = lines[i].quantity + qty)
+        else lines.add(CartLine(p, qty, price))
     }
 
-    /** Pieces go straight into the cart; weighed items first ask for the weight or amount. */
-    fun addOrWeigh(p: Product) {
-        if (p.soldByWeight) weighing = p else add(p)
+    /** Pieces go straight into the bill; weighed items first ask for the weight or amount. */
+    fun addOrWeigh(p: Product, tab: CartTab = active) {
+        if (p.soldByWeight) {
+            weighingTab = tab
+            weighing = p
+        } else {
+            add(p, tab = tab)
+        }
+    }
+
+    /** Called from the weight dialog. */
+    fun addWeighed(p: Product, qty: Double, price: Long) {
+        val tab = weighingTab?.takeIf { it in tabs } ?: active
+        if (qty > 0) add(p, qty, price, tab)
+        weighing = null
+        weighingTab = null
     }
 
     fun setQty(line: CartLine, qty: Double) {
@@ -130,24 +203,44 @@ class PosViewModel(private val repo: MarketRepository) : ViewModel() {
         if (i >= 0) cart[i] = cart[i].copy(unitPrice = price)
     }
 
-    /** Called when Enter is pressed (USB / Bluetooth barcode scanners send Enter). */
+    /**
+     * Called when Enter is pressed (USB / Bluetooth barcode scanners send Enter).
+     * The item goes to the bill that was open when the code was scanned, even if
+     * the cashier switches customer while it is being looked up.
+     */
     suspend fun addByBarcode(code: String): Boolean {
+        val tab = active
         val p = repo.products.findByBarcode(code.trim()) ?: return false
-        addOrWeigh(p)
+        addOrWeigh(p, if (tab in tabs) tab else active)
         return true
     }
 
-    fun clear() {
-        cart.clear()
-        discountText = ""
-        query = ""
+    /** The active bill is finished (sold or emptied): close it. */
+    fun clear() = closeTab(activeId)
+}
+
+/** Finds the hosting activity, so the point of sale keeps its bills app-wide. */
+private fun android.content.Context.findActivity(): androidx.activity.ComponentActivity {
+    var c = this
+    while (c is android.content.ContextWrapper) {
+        if (c is androidx.activity.ComponentActivity) return c
+        c = c.baseContext
     }
+    error("No activity")
+}
+
+/** The point-of-sale state shared by the sales screen and the home screen. */
+@Composable
+fun rememberPos(): PosViewModel {
+    val repo = LocalContainer.current.repo
+    val activity = androidx.compose.ui.platform.LocalContext.current.findActivity()
+    return viewModel(viewModelStoreOwner = activity) { PosViewModel(repo) }
 }
 
 @Composable
 fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
     val repo = LocalContainer.current.repo
-    val vm: PosViewModel = viewModel { PosViewModel(repo) }
+    val vm: PosViewModel = rememberPos()
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
 
@@ -219,6 +312,9 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            // ---- Customers being served
+            CustomerTabs(vm)
+
             // ---- Search / scan
             Row(
                 Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp),
@@ -292,7 +388,7 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
                     )
                     TextButton(onClick = { vm.clear() }) {
                         Icon(Icons.Filled.Delete, null, Modifier.size(18.dp), tint = Danger)
-                        Text(" تفريغ", color = Danger)
+                        Text(if (vm.tabs.size > 1) " إلغاء الفاتورة" else " تفريغ", color = Danger)
                     }
                 }
             }
@@ -351,10 +447,7 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
             unitPrice = p.salePrice,
             initialQty = null,
             onDismiss = { vm.weighing = null },
-            onSave = { qty, price ->
-                if (qty > 0) vm.add(p, qty, price)
-                vm.weighing = null
-            },
+            onSave = { qty, price -> vm.addWeighed(p, qty, price) },
         )
     }
 
@@ -399,6 +492,81 @@ fun PosScreen(onBack: () -> Unit, onOpenSale: (String) -> Unit) {
             confirmButton = { Button(onClick = { done = null }) { Text("فاتورة جديدة") } },
             dismissButton = { TextButton(onClick = { done = null; onOpenSale(sale.id) }) { Text("عرض الفاتورة") } },
         )
+    }
+}
+
+/**
+ * A tab per customer being served. Tap to switch, "+" to start another
+ * customer's bill while the first one is still shopping.
+ */
+@Composable
+private fun CustomerTabs(vm: PosViewModel) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // Keep the active customer in view (e.g. right after adding one).
+    androidx.compose.runtime.LaunchedEffect(vm.activeId, vm.tabs.size) {
+        val i = vm.tabs.indexOfFirst { it.id == vm.activeId }
+        if (i >= 0) listState.animateScrollToItem(i)
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        LazyRow(
+            state = listState,
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(vm.tabs, key = { it.id }) { tab ->
+                val selected = tab.id == vm.activeId
+                Surface(
+                    onClick = { vm.select(tab.id) },
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                    contentColor = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
+                    border = if (selected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.heightIn(min = 52.dp),
+                ) {
+                    Row(
+                        Modifier.padding(start = 14.dp, end = if (vm.tabs.size > 1) 4.dp else 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            Text(tab.label, style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                if (tab.lines.isEmpty()) "فارغة" else "${tab.lines.size} صنف • ${money(tab.total)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (selected) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (vm.tabs.size > 1) {
+                            IconButton(onClick = { vm.closeTab(tab.id) }, modifier = Modifier.size(36.dp)) {
+                                Icon(
+                                    Icons.Filled.Close, "إغلاق ${tab.label}", Modifier.size(16.dp),
+                                    tint = if (selected) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Always visible: starting a new customer is one tap.
+        Surface(
+            onClick = { vm.newTab() },
+            shape = RoundedCornerShape(14.dp),
+            color = Saffron.copy(alpha = 0.22f),
+            contentColor = IndigoDeep,
+            modifier = Modifier.heightIn(min = 52.dp),
+        ) {
+            Column(
+                Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(Icons.Filled.Add, null, Modifier.size(20.dp))
+                Text("زبون جديد", style = MaterialTheme.typography.labelSmall)
+            }
+        }
     }
 }
 

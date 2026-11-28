@@ -17,6 +17,12 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import com.tareqsoft.market.util.WalletPay
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Row
@@ -158,6 +164,7 @@ fun WalletPayCard(amount: Long, modifier: Modifier = Modifier) {
     }
     val code = WalletPay.ussd(settings.walletPrefix, number, amount)
     val qr = remember(code) { qrImage(WalletPay.telUri(code)) }
+    var zoomed by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     androidx.compose.material3.Surface(
         modifier = modifier.fillMaxWidth(),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
@@ -169,14 +176,82 @@ fun WalletPayCard(amount: Long, modifier: Modifier = Modifier) {
             Image(
                 bitmap = qr, contentDescription = "رمز الدفع عبر محفظتي",
                 filterQuality = FilterQuality.None,
-                modifier = Modifier.padding(vertical = 8.dp).size(190.dp),
+                modifier = Modifier
+                    .padding(vertical = 8.dp)
+                    .size(190.dp)
+                    .clickable { zoomed = true },
             )
             Text(money(amount), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
             LtrCode(code, MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"), Color.DarkGray)
+            androidx.compose.material3.FilledTonalButton(
+                onClick = { zoomed = true },
+                modifier = Modifier.padding(vertical = 6.dp).heightIn(min = 48.dp),
+            ) {
+                Icon(ZoomIcon, null, Modifier.size(20.dp))
+                Text("  تكبير الرمز")
+            }
             Text(
                 "يُفتح الاتصال والرمز مكتوب، يضغط الزبون اتصال لإتمام التحويل. بعد وصول الرسالة اكتب رقم العملية بالأسفل.",
                 style = MaterialTheme.typography.bodySmall, color = Color.Gray, textAlign = TextAlign.Center,
             )
+        }
+    }
+    if (zoomed) QrFullScreen(qr, code, amount) { zoomed = false }
+}
+
+/** Magnifier with a plus. */
+private val ZoomIcon = ImageVector.Builder("Zoom", 24.dp, 24.dp, 24f, 24f).apply {
+    addPath(
+        PathParser().parsePathString(
+            "M15.5,14h-0.79l-0.28,-0.27C15.41,12.59 16,11.11 16,9.5 16,5.91 13.09,3 9.5,3S3,5.91 3,9.5 5.91,16 9.5,16c1.61,0 3.09,-0.59 4.23,-1.57l0.27,0.28v0.79l5,4.99L20.49,19l-4.99,-5zM9.5,14C7.01,14 5,11.99 5,9.5S7.01,5 9.5,5 14,7.01 14,9.5 11.99,14 9.5,14zM12,10h-2v2H9v-2H7V9h2V7h1v2h2v1z"
+        ).toNodes(),
+        fill = SolidColor(Color.Black),
+    )
+}.build()
+
+/**
+ * The payment QR as large as the screen allows, on white, with the screen at
+ * full brightness while it is open so the customer's camera reads it quickly.
+ */
+@Composable
+private fun QrFullScreen(qr: ImageBitmap, code: String, amount: Long, onClose: () -> Unit) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onClose,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        // Full brightness while the code is shown; restored when it closes.
+        val view = androidx.compose.ui.platform.LocalView.current
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+            val old = window?.attributes?.screenBrightness
+            window?.attributes = window?.attributes?.apply { screenBrightness = 1f }
+            onDispose { if (window != null && old != null) window.attributes = window.attributes.apply { screenBrightness = old } }
+        }
+        androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = Color.White) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing)
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+            ) {
+                Text("امسح الرمز بكاميرا جوال الزبون", style = MaterialTheme.typography.titleMedium, color = Color.Black)
+                Image(
+                    bitmap = qr, contentDescription = "رمز الدفع عبر محفظتي",
+                    filterQuality = FilterQuality.None,
+                    // Takes the space left over, so the close button always stays visible.
+                    modifier = Modifier.weight(1f, fill = false).aspectRatio(1f),
+                )
+                Text(
+                    money(amount),
+                    style = MaterialTheme.typography.displaySmall.copy(fontFeatureSettings = "tnum"),
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                LtrCode(code, MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"), Color.DarkGray)
+                PrimaryActionButton("إغلاق", onClick = onClose)
+            }
         }
     }
 }
