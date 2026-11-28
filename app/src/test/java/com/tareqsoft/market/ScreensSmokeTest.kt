@@ -107,4 +107,39 @@ class ScreensSmokeTest {
         // The full-screen window is removed a moment after closing.
         rule.waitUntil(3_000) { rule.onAllNodesWithText("إغلاق").fetchSemanticsNodes().isEmpty() }
     }
+
+    /** Two customers served at the same time, each with their own bill. */
+    @Test
+    fun twoCustomersAtOnce() {
+        val repo = (rule.activity.application as MarketApp).container.repo
+        kotlinx.coroutines.runBlocking {
+            repo.addProduct(com.tareqsoft.market.data.Product(name = "حليب", barcode = "111", salePrice = 500, quantity = 9.0))
+            repo.addProduct(com.tareqsoft.market.data.Product(name = "خبز", barcode = "222", salePrice = 200, quantity = 9.0))
+        }
+        rule.onNodeWithText("نقطة البيع").performScrollTo().performClick()
+        val field = rule.onNodeWithText("الباركود أو اسم الصنف")
+        fun scan(code: String) { field.performTextInput(code); field.performImeAction(); Thread.sleep(400); rule.waitForIdle() }
+
+        scan("111")                                        // customer 1: milk
+        rule.onNodeWithText("زبون جديد", substring = true).performClick(); rule.waitForIdle()
+        scan("222"); scan("222")                           // customer 2: 2 bread
+        rule.onNodeWithText("2.00 × 2", substring = true).assertExists()
+        rule.onNodeWithText("5.00 × 1", substring = true).assertDoesNotExist()
+
+        rule.onNodeWithText("زبون 1").performClick(); rule.waitForIdle()
+        rule.onNodeWithText("5.00 × 1", substring = true).assertExists()
+
+        // Sell customer 1 in cash: their tab closes, customer 2's bill is untouched.
+        rule.onNodeWithText("إتمام البيع (1 صنف)").performClick(); rule.waitForIdle()
+        rule.onNodeWithText("تأكيد البيع").performClick()
+        rule.waitUntil(3_000) { rule.onAllNodesWithText("فاتورة جديدة").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("فاتورة جديدة").performClick(); rule.waitForIdle()
+        rule.onNodeWithText("2.00 × 2", substring = true).assertExists()
+        rule.onNodeWithText("زبون 1").assertDoesNotExist()
+
+        // Leaving the screen keeps the open bill; the home screen counts it.
+        rule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        rule.waitForIdle()
+        rule.onNodeWithText("فواتير مفتوحة: 1").assertExists()
+    }
 }

@@ -1,8 +1,8 @@
 {
-  "version": "1.1.3",
-  "versionCode": 10103,
+  "version": "1.1.4",
+  "versionCode": 10104,
   "mandatory": false,
   "apkUrl": "https://raw.githubusercontent.com/tareqsoft2025/market/main/dist/market.apk",
   "size": 7906065,
-  "notes": "زر تكبير رمز الدفع: يعرض الرمز بملء الشاشة بإضاءة كاملة ليسهل مسحه"
+  "notes": "بيع أكثر من زبون في نفس الوقت: لكل زبون فاتورة في تبويب، والتنقل بينها بلمسة • تكبير رمز الدفع لملء الشاشة"
 }

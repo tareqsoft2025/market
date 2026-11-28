@@ -90,6 +90,7 @@ fun HomeScreen(navigate: (String) -> Unit) {
     val returnsTotal by remember { repo.sales.observeReturnsTotal(from, to) }.collectAsStateWithLifecycle(0L)
     val pendingBank by remember { repo.payments.observePendingBankCount() }.collectAsStateWithLifecycle(0)
     val lowStock by remember { repo.products.observeLowStockCount() }.collectAsStateWithLifecycle(0)
+    val pos = rememberPos()
 
     Column(
         Modifier
@@ -173,7 +174,11 @@ fun HomeScreen(navigate: (String) -> Unit) {
                     ) { Icon(Icons.Filled.ShoppingCart, null, tint = IndigoDeep, modifier = Modifier.size(28.dp)) }
                     Column(Modifier.weight(1f).padding(start = 16.dp)) {
                         Text("نقطة البيع", style = MaterialTheme.typography.titleLarge, color = Color.White)
-                        Text("ابدأ فاتورة جديدة", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (pos.openBills > 0) "فواتير مفتوحة: ${pos.openBills}" else "ابدأ فاتورة جديدة",
+                            color = if (pos.openBills > 0) Saffron else Color.White.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                     Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = Color.White.copy(alpha = 0.8f))
                 }
